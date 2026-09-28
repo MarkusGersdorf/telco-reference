@@ -27,6 +27,11 @@ networking:
     - 192.0.2.4
   default_gateway: 172.31.61.1
 
+  # NTP sources (omit to use default Red Hat NTP pool)
+  # ntp_sources:
+  #   - ntp1.example.com
+  #   - ntp2.example.com
+
 # Full boot-disk RAID 1 mirror (ESP + /boot + root) across these disks, so a
 # single disk failure does not take the node down. List one disk to disable
 # mirroring entirely. Rendered by templates/raid-mirror.yaml.j2 into a day-1
