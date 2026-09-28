@@ -112,6 +112,8 @@ hosts:
 {% endfor %}
       dns-resolver:
         config:
+          search:
+            - {{ cluster.name }}.{{ cluster.base_domain }}
           server:
 {% for dns in networking.dns_servers %}
             - {{ dns }}
