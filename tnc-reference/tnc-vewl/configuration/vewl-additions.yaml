@@ -27,7 +27,7 @@ policies:
 # CNV Operator
     - path: other-crs/required/CNV/CnvNS.yaml
     - path: other-crs/required/CNV/CnvOperGroup.yaml
-    - path: other-crs/required/CNV/CnvSubscription.yaml    
+    - path: other-crs/required/CNV/CnvSubscription.yaml
       patches:
         - spec:
             installPlanApproval: Manual

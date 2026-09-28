@@ -23,7 +23,7 @@ This directory contains five key components of the TNC configuration:
 
 ## Reference CRs
 
-**Note:** The reference CRs and/or the policyGerator YAMLs in this repo point to a private image registry at `registry.bastion.example.com:9500`. All those references need to be updated to point to the local private registry.
+**Note:** The reference CRs and/or the policyGerator YAMLs in this repo point to a private image registry at `registry.bastion.example.com:9500`. All     those references need to be updated to point to the local private registry.
 
 ### Policy generation CRs
 
@@ -102,5 +102,4 @@ Ensure that the following credentials exist in the vault:
 - ldap-auth-secret
   - `bindPassword` - to authenticate the OpenShift cluster with LDAP server
 - ldap-group-sync-creds
-  - `bindPassword` - to authenticate the OpenShift cluster with LDAP server
-
+  - `bind_password` - to authenticate the OpenShift cluster with LDAP server

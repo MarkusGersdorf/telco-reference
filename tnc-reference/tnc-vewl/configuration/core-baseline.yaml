@@ -2,7 +2,7 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
-  name: core-baseline-19
+  name: core-baseline-22
 policyDefaults:
   namespace: ztp-core-policies
   policySets: []
@@ -21,8 +21,8 @@ policies:
       - path: reference-crs/required/other/catalog-source.yaml
         patches:
         - spec:
-            image: registry.redhat.io/redhat/redhat-operator-index:v4.22
-      - path: reference-crs/required/scheduling/Scheduler.yaml
+            image: '{{hub fromConfigMap "" .ManagedClusterName "registry-fqdn" hub}}/ocp/ocp4/redhat/redhat-operator-index:v4.22'
+      #- path: reference-crs/required/scheduling/Scheduler.yaml
 
   # Core cluster OLM operators
   - name: core-operator-subs-4.22
@@ -40,7 +40,7 @@ policies:
               - kind: ClusterServiceVersion
                 namespace: openshift-logging
                 # Update with specific target version
-                name: cluster-logging.v6.2.0
+                name: cluster-logging.v6.6.1
                 conditions:
                   - type: Succeeded
                     status: "True"
@@ -102,8 +102,11 @@ policies:
 
       - path: reference-crs/required/networking/NMState.yaml
 
+      # Firewall node disruption policy
+      - path: reference-crs/optional/networking/firewall/node-disruption-policy.yaml
+
       # Scheduling
       - path: reference-crs/required/scheduling/sched.yaml
         patches:
         - spec:
-            imageSpec: registry.example.com/openshift4/noderesourcetopology-scheduler-rhel9:v4.22.0
+            imageSpec: '{{hub fromConfigMap "" .ManagedClusterName "registry-fqdn" hub}}/ocp/ocp4/openshift4/noderesourcetopology-scheduler-rhel9:v4.22'

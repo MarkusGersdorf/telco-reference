@@ -1,3 +1,4 @@
+---
 apiVersion: hive.openshift.io/v1
 kind: ClusterImageSet
 metadata:
@@ -5,5 +6,4 @@ metadata:
   annotations:
     argocd.argoproj.io/sync-wave: "100"
 spec:
-  releaseImage: registry.bastion.example.com:9500/ocp/ocp4/openshift/release-images:4.22.12-x86_64
-
+  releaseImage: registry.bastion.example.com:9500/ocp/ocp4/openshift/release-images:4.22.5-x86_64

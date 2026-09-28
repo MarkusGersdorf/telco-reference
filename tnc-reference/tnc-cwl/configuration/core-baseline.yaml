@@ -2,7 +2,7 @@
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
-  name: core-baseline-19
+  name: core-baseline-22
 policyDefaults:
   namespace: ztp-core-policies
   policySets: []
@@ -22,9 +22,10 @@ policies:
         patches:
         - spec:
             image: '{{hub fromConfigMap "" .ManagedClusterName "registry-fqdn" hub}}/ocp/ocp4/redhat/redhat-operator-index:v4.22'
-      #  
+
+      #
       # Not disabling scheduling on master nodes
-      #  
+      #
       #- path: reference-crs/required/scheduling/Scheduler.yaml
 
   # Core cluster OLM operators
@@ -43,11 +44,16 @@ policies:
               - kind: ClusterServiceVersion
                 namespace: openshift-logging
                 # Update with specific target version
-                name: cluster-logging.v6.2.11
+                name: cluster-logging.v6.6.1
                 conditions:
                   - type: Succeeded
                     status: "True"
                     reason: InstallSucceeded
+
+      # Cert-manager operator (optional component)
+      #- path: reference-crs/optional/cert-manager/certManagerNS.yaml
+      #- path: reference-crs/optional/cert-manager/certManagerOperatorgroup.yaml
+      #- path: reference-crs/optional/cert-manager/certManagerSubscription.yaml
 
       - path: reference-crs/required/networking/sriov/SriovSubscriptionNS.yaml
       - path: reference-crs/required/networking/sriov/SriovSubscriptionOperGroup.yaml
@@ -99,6 +105,9 @@ policies:
             - mellanox
 
       - path: reference-crs/required/networking/NMState.yaml
+
+      # Firewall node disruption policy
+      - path: reference-crs/optional/networking/firewall/node-disruption-policy.yaml
 
       # Scheduling
       - path: reference-crs/required/scheduling/sched.yaml

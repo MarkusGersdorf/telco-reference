@@ -1,3 +1,4 @@
+---
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
@@ -21,7 +22,7 @@ policies:
         patches:
         - spec:
             installPlanApproval: Manual
-            channel: "stable-3.16" 
+            channel: "stable-3.18"
 
       - path: other-crs/required/QUAY/QuaySecret.yaml
         patches:
@@ -30,7 +31,7 @@ policies:
             - extract:
                 conversionStrategy: Default
                 decodingStrategy: None
-                key: ztp/mgmt1/quay-config-bundle
+                key: ztp/{{hub (printf "%s" .ManagedClusterName) hub}}/quay-config-bundle
                 metadataPolicy: None
 
       - path: other-crs/required/QUAY/QuayServiceAccount.yaml

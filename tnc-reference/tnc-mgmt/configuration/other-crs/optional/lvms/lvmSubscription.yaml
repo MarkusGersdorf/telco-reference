@@ -12,4 +12,3 @@ spec:
   name: lvms-operator
   source: redhat-operators-disconnected
   sourceNamespace: openshift-marketplace
-

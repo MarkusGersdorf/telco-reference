@@ -72,4 +72,3 @@ Cluster installation requires access to the following credentials at a minimum:
 These secrets should be stored in a vault server and retrieved during cluster installation. This means that the presence of a vault server is a pre-requisite for installing the OpenShift cluster via ACM GitOps procedure as captured in this repository. 
 
 If a vault server is not available then the CR(s) created in the `secrets` directory need to be updated to provide the credentials locally. However, this approach will result in pushing those credentials to the GIT server and hence appropriate procedures need to be put in place to protect the data in the GIT server, or the credentials need to be manually created prior to stating the GitOps process in order to avoid pushing them to the GIT server.
-

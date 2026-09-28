@@ -23,7 +23,7 @@ This directory contains five key components of the TNC configuration:
 
 ## Reference CRs
 
-**Note:** The reference CRs and/or the policyGerator YAMLs in this repo point to a private image registry at `registry.bastion.example.com:9500`. All those references need to be updated to point to the local private registry.
+**Note:** The reference CRs and/or the policyGerator YAMLs in this repo point to a private image registry at `registry.bastion.example.com:9500`. All     those references need to be updated to point to the local private registry.
 
 ### Policy generation CRs
 
@@ -88,7 +88,7 @@ is needed. The ConfigMap name is the cluster name eg cluster-1234
 #### Vault for Secrets
 
 The policies in this repository rely on the presence of an external vault server, 
-which holds the different credentials (passwords, SSH keys etc.) used within the policies.
+which holds the different credentials (passwords, certificates etc.) used within the policies.
 Ensure that the following credentials exist in the vault:
 
 - ldap-ca-cert
@@ -96,9 +96,8 @@ Ensure that the following credentials exist in the vault:
 - ldap-auth-secret
   - `bindPassword` - to authenticate the OpenShift cluster with LDAP server
 - ldap-group-sync-creds
-  - `bindPassword` - to authenticate the OpenShift cluster with LDAP server
+  - `bind_password` - to authenticate the OpenShift cluster with LDAP server
 - multiclusterhub-operator-pull-secret
   - `pullsecret` - Pull secert to be used for ZTP of the managed cluster
 - quay-config-bundle-secret
   - `config.yaml` - Provides the full Quay configuration
-

@@ -1,3 +1,4 @@
+---
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
@@ -11,7 +12,7 @@ policyDefaults:
       tnc-ver: "tnc7.0"
       kafka: "true"
   remediationAction: "inform"
-policies:    
+policies:
   - name: kafka-subs-tnc70
     policyAnnotations:
       ran.openshift.io/ztp-deploy-wave: "2"
@@ -192,4 +193,3 @@ policies:
                     metrics:
                       topic: '{{hub (printf "%s" .ManagedClusterName) hub}}-platform-metrics'
                       encoding: otlp_proto
-

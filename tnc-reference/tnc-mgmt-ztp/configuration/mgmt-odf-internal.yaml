@@ -1,3 +1,4 @@
+---
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
@@ -14,12 +15,12 @@ policyDefaults:
 policies:
   - name: operator-lso-tnc70
     policyAnnotations:
-      ran.openshift.io/ztp-deploy-wave: "5" 
+      ran.openshift.io/ztp-deploy-wave: "5"
     manifests:
       - path: other-crs/optional/LSO/LsoNS.yaml
       - path: other-crs/optional/LSO/LsoOperGroup.yaml
       - path: other-crs/optional/LSO/LsoSubscription.yaml
-        patches:  
+        patches:
           - spec:
               installPlanApproval: Manual
 
@@ -45,7 +46,7 @@ policies:
                     - ReadWriteOnce
                     resources:
                       requests:
-                        storage: "1" 
+                        storage: "1"
                     storageClassName: "localblock"
                     volumeMode: Block
                 name: ocs-deviceset
@@ -54,7 +55,7 @@ policies:
                 replica: 3
                 resources:
                   limits:
-                    cpu: "2" 
+                    cpu: "2"
                     memory: "5Gi"
                   requests:
                     cpu: "2"
@@ -73,34 +74,35 @@ policies:
 ### Configure monitoring
       - path: reference-crs/optional/other/monitoring-config-cm.yaml
         complianceType: musthave
-        #patches:
-        #- data:
-        #    # The config is a single string value in this map and default
-        #    # content must be copied here in order to add custom content
-        #    # (additionalAlertmanagerConfigs)
-        #    config.yaml: |
-        #      alertmanagerMain:
-        #        volumeClaimTemplate:
-        #          spec:
-        #            storageClassName: ocs-storagecluster-ceph-rbd
-        #            resources:
-        #              requests:
-        #                storage: 20Gi
-        #      prometheusK8s:
-        #        retention: 15d
-        #        volumeClaimTemplate:
-        #          spec:
-        #            storageClassName: ocs-storagecluster-ceph-rbd
-        #            resources:
-        #              requests:
-        #                storage: 100Gi
-        #        #additionalAlertmanagerConfigs:
-        #        #- scheme: "http"
-        #        #  pathPrefix: "/"
-        #        #  timeout: "30s"
-        #        #  apiVersion: "v2"
-        #        #  staticConfigs:
-        #        #  - "10.11.12.14:9999"
+        patches:
+        - data:
+            config.yaml: |
+              nodeExporter:
+                collectors:
+                  buddyinfo: {}
+                  cpufreq: {}
+                  ksmd: {}
+                  mountstats: {}
+                  netclass: {}
+                  netdev: {}
+                  processes: {}
+                  systemd: {}
+                  tcpstat: {}
+              prometheusK8s:
+                retention: 15d
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: ocs-storagecluster-ceph-rbd
+                    resources:
+                      requests:
+                        storage: 100Gi
+              alertmanagerMain:
+                volumeClaimTemplate:
+                  spec:
+                    storageClassName: ocs-storagecluster-ceph-rbd
+                    resources:
+                      requests:
+                        storage: 20Gi
 ### LOKI
       - path: other-crs/optional/LOG/LOKI/LokiS3Secret.yaml
         patches:

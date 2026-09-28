@@ -23,11 +23,11 @@ This directory contains five key components of the TNC configuration:
 
 ## Reference CRs
 
-**Note:** The reference CRs and/or the policyGerator YAMLs in this repo point to a private image registry at `registry.bastion.example.com:9500`. All those references need to be updated to point to the local private registry.
+**Note:** The reference CRs and/or the policyGerator YAMLs in this repo point to a private image registry at `registry.bastion.example.com:9500`. All     those references need to be updated to point to the local private registry.
 
 ### Policy generation CRs
 
-The repository includes several PolicyGenerator CRs named `aiwl-xxx.yaml` at this
+The repository includes several PolicyGenerator CRs named "aiwl-xxx.yaml" at this
 top level. These CRs serve as manifests and customization of the `reference` and `other`
 configuration CRs. The PolicyGenerator CR is turned into ACM Policy CRs which
 can then be used to configure one or more clusters with the sub-architecture
@@ -94,6 +94,4 @@ Ensure that the following credentials exist in the vault:
 - ldap-auth-secret
   - `bindPassword` - to authenticate the OpenShift cluster with LDAP server
 - ldap-group-sync-creds
-  - `bindPassword` - to authenticate the OpenShift cluster with LDAP server
-
-
+  - `bind_password` - to authenticate the OpenShift cluster with LDAP server

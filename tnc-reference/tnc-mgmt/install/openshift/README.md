@@ -22,4 +22,3 @@
    `oc get clusteroperators` (check that all the operators have been installed)
 
 For more information see [Installing an OpenShit cluster with the Agent-based Installer](https://docs.openshift.com/container-platform/4.18/installing/installing_with_agent_based_installer/installing-with-agent-based-installer.html).
-

@@ -1,3 +1,4 @@
+---
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
@@ -14,12 +15,12 @@ policyDefaults:
 policies:
   - name: roperator-lso-tnc70
     policyAnnotations:
-      ran.openshift.io/ztp-deploy-wave: "5" 
+      ran.openshift.io/ztp-deploy-wave: "5"
     manifests:
       - path: other-crs/optional/LSO/LsoNS.yaml
       - path: other-crs/optional/LSO/LsoOperGroup.yaml
       - path: other-crs/optional/LSO/LsoSubscription.yaml
-        patches:  
+        patches:
           - spec:
               installPlanApproval: Manual
 

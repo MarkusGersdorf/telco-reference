@@ -5,4 +5,3 @@
     path: "tnc-reference/tnc-cwl/configuration"
     repoURL: "https://github.com/openshift-kni/telco-reference.git"
     targetRevision: "tnc7.0-release-4.22"
-#

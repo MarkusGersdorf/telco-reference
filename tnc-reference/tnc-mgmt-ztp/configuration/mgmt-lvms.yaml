@@ -1,3 +1,4 @@
+---
 apiVersion: policy.open-cluster-management.io/v1
 kind: PolicyGenerator
 metadata:
@@ -19,7 +20,7 @@ policies:
       - path: other-crs/optional/lvms/lvmNS.yaml
       - path: other-crs/optional/lvms/lvmOperGroup.yaml
       - path: other-crs/optional/lvms/lvmSubscription.yaml
-        patches:  
+        patches:
           - spec:
               installPlanApproval: Manual
       - path: other-crs/optional/lvms/lvmCluster.yaml
