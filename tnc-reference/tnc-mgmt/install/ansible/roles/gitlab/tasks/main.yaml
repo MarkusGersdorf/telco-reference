@@ -1,0 +1,186 @@
+---
+- name: Render GitLab manifests
+  ansible.builtin.template:
+    src: "configuration/{{ item.src }}"
+    dest: "{{ config_stage_dir }}/{{ item.dest }}"
+    mode: "0644"
+  loop:
+    - src: gitlab-namespace.yaml.j2
+      dest: gitlab-namespace.yaml
+    - src: gitlab-subscription.yaml.j2
+      dest: gitlab-subscription.yaml
+    - src: gitlab-cr.yaml.j2
+      dest: gitlab-cr.yaml
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Install GitLab operator
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }} apply
+    -f {{ config_stage_dir }}/gitlab-namespace.yaml
+    -f {{ config_stage_dir }}/gitlab-subscription.yaml
+
+- name: Wait for GitLab operator
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n gitlab-system get subscriptions.operators.coreos.com
+    gitlab-operator-kubernetes -o jsonpath='{.status.state}'
+  register: gitlab_op_state
+  until: gitlab_op_state.stdout == "AtLatestKnown"
+  retries: 30
+  delay: 20
+  changed_when: false
+
+- name: Wait for GitLab CRD
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    get crd gitlabs.apps.gitlab.com
+  register: gitlab_crd
+  until: gitlab_crd.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Create GitLab instance
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/gitlab-cr.yaml
+
+- name: Wait for GitLab to be running
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n gitlab-system get gitlab gitlab
+    -o jsonpath='{.status.phase}'
+  register: gitlab_phase
+  until: gitlab_phase.stdout == "Running"
+  retries: 60
+  delay: 30
+  changed_when: false
+
+# --- Initialize GitLab (user, repo, push) ---
+
+- name: Set GitLab facts
+  ansible.builtin.set_fact:
+    gitlab_host: "gitlab.apps.{{ cluster.name }}.{{ cluster.base_domain }}"
+    gitlab_repo_url: "https://gitlab.apps.{{ cluster.name }}.{{ cluster.base_domain }}/{{ configuration.gitlab.group }}/{{ configuration.gitlab.project }}.git"
+
+- name: Wait for GitLab API
+  ansible.builtin.uri:
+    url: "https://{{ gitlab_host }}/api/v4/version"
+    validate_certs: false
+  register: gitlab_api
+  until: gitlab_api.status == 200
+  retries: 30
+  delay: 20
+
+- name: Create automation PAT via GitLab Rails runner
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n gitlab-system exec deploy/gitlab-toolbox --
+    gitlab-rails runner "
+      user = User.find(1);
+      user.personal_access_tokens.active.where(name: 'ansible-automation').each(&:revoke!);
+      token = user.personal_access_tokens.create!(
+        name: 'ansible-automation',
+        scopes: ['api', 'write_repository'],
+        expires_at: 365.days.from_now
+      );
+      puts token.token
+    "
+  register: gitlab_pat_result
+  no_log: true
+
+- name: Set PAT fact
+  ansible.builtin.set_fact:
+    gitlab_pat: "{{ gitlab_pat_result.stdout_lines[-1] }}"
+  no_log: true
+
+- name: Create GitLab group
+  ansible.builtin.uri:
+    url: "https://{{ gitlab_host }}/api/v4/groups"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_pat }}"
+    body_format: json
+    body:
+      name: "{{ configuration.gitlab.group }}"
+      path: "{{ configuration.gitlab.group }}"
+      visibility: internal
+    status_code: [200, 201]
+    validate_certs: false
+  register: gitlab_group
+  ignore_errors: true
+
+- name: Get existing GitLab group (if create returned conflict)
+  ansible.builtin.uri:
+    url: "https://{{ gitlab_host }}/api/v4/groups/{{ configuration.gitlab.group }}"
+    method: GET
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_pat }}"
+    validate_certs: false
+  register: gitlab_group_existing
+  when: gitlab_group is failed
+
+- name: Set group ID fact
+  ansible.builtin.set_fact:
+    gitlab_group_id: "{{ (gitlab_group.json.id | default(gitlab_group_existing.json.id)) }}"
+
+- name: Create GitLab project
+  ansible.builtin.uri:
+    url: "https://{{ gitlab_host }}/api/v4/projects"
+    method: POST
+    headers:
+      PRIVATE-TOKEN: "{{ gitlab_pat }}"
+    body_format: json
+    body:
+      name: "{{ configuration.gitlab.project }}"
+      path: "{{ configuration.gitlab.project }}"
+      namespace_id: "{{ gitlab_group_id }}"
+      visibility: internal
+      initialize_with_readme: false
+    status_code: [200, 201]
+    validate_certs: false
+  ignore_errors: true
+
+- name: Push repo to GitLab
+  ansible.builtin.shell: |
+    git remote add gitlab-push "https://root:{{ gitlab_pat }}@{{ gitlab_host }}/{{ configuration.gitlab.group }}/{{ configuration.gitlab.project }}.git" 2>/dev/null || \
+    git remote set-url gitlab-push "https://root:{{ gitlab_pat }}@{{ gitlab_host }}/{{ configuration.gitlab.group }}/{{ configuration.gitlab.project }}.git"
+    GIT_SSL_NO_VERIFY=true git push gitlab-push HEAD:refs/heads/{{ configuration.gitops.branch }}
+    git remote remove gitlab-push
+  args:
+    chdir: "{{ playbook_dir }}/../../../.."
+  no_log: true
+
+- name: GitLab ready
+  ansible.builtin.debug:
+    msg:
+      - "GitLab: https://{{ gitlab_host }}"
+      - "Repo: {{ gitlab_repo_url }}"
+      - "Branch: {{ configuration.gitops.branch }}"
+
+# --- Re-template GitOps patches with real GitLab URL ---
+
+- name: Template GitOps patches with GitLab credentials
+  ansible.builtin.template:
+    src: "configuration/{{ item.src }}"
+    dest: "{{ config_stage_dir }}/{{ item.dest }}"
+    mode: "0644"
+  vars:
+    configuration: >-
+      {{ configuration | combine({
+        'gitops': {
+          'repo_url': gitlab_repo_url,
+          'branch': configuration.gitops.branch,
+          'git_username': 'root',
+          'git_password': gitlab_pat
+        }
+      }, recursive=True) }}
+  loop:
+    - src: gitops-init-argocd-app.yaml.j2
+      dest: overlays/gitops/init-argocd-app.yaml
+    - src: gitops-ztp-repo-secret-patch.yaml.j2
+      dest: overlays/gitops/ztp-repo-secret-patch.yaml
+  loop_control:
+    label: "{{ item.dest | basename }}"
+  no_log: true

@@ -1,0 +1,8 @@
+---
+- op: replace
+  path: /spec/storageDeviceSets/0/dataPVCTemplate/spec/resources/requests/storage
+  value: "{{ configuration.odf.storage_size }}"
+
+- op: replace
+  path: /spec/storageDeviceSets/0/dataPVCTemplate/spec/storageClassName
+  value: "{{ configuration.odf.storage_class }}"

@@ -1,0 +1,11 @@
+---
+{% if configuration.vault.ca_bundle is defined %}
+- op: replace
+  path: "/data/ca.crt"
+  value: |
+{{ configuration.vault.ca_bundle | indent(4, true) }}
+{% else %}
+- op: replace
+  path: "/data/ca.crt"
+  value: ""
+{% endif %}

@@ -1,0 +1,54 @@
+---
+- name: Clean staging area
+  ansible.builtin.file:
+    path: "{{ config_stage_dir }}"
+    state: absent
+
+- name: Copy configuration tree to staging area (dereference symlinks)
+  ansible.builtin.command: cp -rL {{ config_src_dir }} {{ config_stage_dir }}
+
+- name: Template overlay patches from vars.yaml
+  ansible.builtin.template:
+    src: "configuration/{{ item.src }}"
+    dest: "{{ config_stage_dir }}/{{ item.dest }}"
+    mode: "0644"
+  loop:
+    - src: kustomization.yaml.j2
+      dest: kustomization.yaml
+      component: _always
+    - src: lso-local-storage-disks-patch.yaml.j2
+      dest: overlays/lso/local-storage-disks-patch.yaml
+      component: lso
+    - src: odf-options-storage-cluster.yaml.j2
+      dest: overlays/odf/options-storage-cluster.yaml
+      component: odf
+    - src: odf-default-storage-class-patch.yaml.j2
+      dest: overlays/odf/OdfDefaultStorageClass-patch.yaml
+      component: odf
+    - src: acm-agentserviceconfig-patch.yaml.j2
+      dest: overlays/acm/options-agentserviceconfig-patch.yaml
+      component: acm
+    - src: acm-storage-mco-patch.yaml.j2
+      dest: overlays/acm/storage-mco-patch.yaml
+      component: acm
+    - src: vault-clustersecretstore-patch.yaml.j2
+      dest: overlays/vault/ClusterSecretStore-patch.yaml
+      component: vault
+    - src: vault-ca-patch.yaml.j2
+      dest: overlays/vault/VaultCertificate-ca-patch.yaml
+      component: vault
+    - src: quay-secret-patch.yaml.j2
+      dest: overlays/quay/quay_secret-patch.yaml
+      component: quay
+  loop_control:
+    label: "{{ item.dest | basename }}"
+  when: item.component == '_always' or item.component in configuration.components
+
+- name: Fix catalog source for connected deployment
+  ansible.builtin.replace:
+    path: "{{ item }}"
+    regexp: 'source: redhat-operators-disconnected'
+    replace: "source: {{ configuration.catalog_source }}"
+  with_fileglob:
+    - "{{ config_stage_dir }}/reference-crs/optional/*/*Subscription.yaml"
+    - "{{ config_stage_dir }}/reference-crs/required/*/*Subscription.yaml"
