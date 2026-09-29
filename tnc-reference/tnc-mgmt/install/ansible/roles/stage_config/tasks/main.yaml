@@ -47,11 +47,20 @@
     (item.component == '_always' or item.component in configuration.components)
     and (item.requires | default('') == '' or item.requires in configuration.components)
 
+- name: Find all Subscription files in staging area
+  ansible.builtin.find:
+    paths:
+      - "{{ config_stage_dir }}/reference-crs/optional"
+      - "{{ config_stage_dir }}/reference-crs/required"
+    patterns: '*Subscription.yaml'
+    recurse: true
+  register: subscription_files
+
 - name: Fix catalog source for connected deployment
   ansible.builtin.replace:
-    path: "{{ item }}"
+    path: "{{ item.path }}"
     regexp: 'source: redhat-operators-disconnected'
     replace: "source: {{ configuration.catalog_source }}"
-  with_fileglob:
-    - "{{ config_stage_dir }}/reference-crs/optional/*/*Subscription.yaml"
-    - "{{ config_stage_dir }}/reference-crs/required/*/*Subscription.yaml"
+  loop: "{{ subscription_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
