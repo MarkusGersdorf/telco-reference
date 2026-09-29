@@ -40,9 +40,12 @@
     - src: quay-secret-patch.yaml.j2
       dest: overlays/quay/quay_secret-patch.yaml
       component: quay
+      requires: vault
   loop_control:
     label: "{{ item.dest | basename }}"
-  when: item.component == '_always' or item.component in configuration.components
+  when: >-
+    (item.component == '_always' or item.component in configuration.components)
+    and (item.requires | default('') == '' or item.requires in configuration.components)
 
 - name: Fix catalog source for connected deployment
   ansible.builtin.replace:
