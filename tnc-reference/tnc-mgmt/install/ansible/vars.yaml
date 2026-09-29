@@ -115,6 +115,17 @@ configuration:
   # disconnected use redhat-operators-disconnected (must match your CatalogSource)
   catalog_source: redhat-operators
 
+  # Subscription channel overrides — the reference CRs pin channels for
+  # disconnected catalogs that may differ from the connected catalog.
+  # Map operator package name to the channel available in your catalog.
+  # Omit an operator to keep the channel from the reference CR unchanged.
+  channel_overrides:
+    odf-operator: stable-4.22
+    # local-storage-operator: stable
+    # openshift-gitops-operator: gitops-1.20
+    # advanced-cluster-management: release-2.17
+    # cluster-logging: stable-6.6
+
   # GitLab instance deployed on this cluster (before ArgoCD, needs ODF)
   gitlab:
     group: telco

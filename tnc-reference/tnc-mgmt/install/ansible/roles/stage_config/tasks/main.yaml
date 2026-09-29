@@ -64,3 +64,25 @@
   loop: "{{ subscription_files.files }}"
   loop_control:
     label: "{{ item.path | basename }}"
+
+- name: Read operator package name from each Subscription
+  ansible.builtin.command: >
+    python3 -c "import yaml; print(yaml.safe_load(open('{{ item.path }}'))['spec']['name'])"
+  register: subscription_names
+  loop: "{{ subscription_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  changed_when: false
+  when: configuration.channel_overrides is defined
+
+- name: Fix subscription channels for connected deployment
+  ansible.builtin.replace:
+    path: "{{ item.item.path }}"
+    regexp: 'channel: .*'
+    replace: "channel: {{ configuration.channel_overrides[item.stdout] }}"
+  loop: "{{ subscription_names.results }}"
+  loop_control:
+    label: "{{ item.item.path | basename }}"
+  when:
+    - configuration.channel_overrides is defined
+    - item.stdout in configuration.channel_overrides
