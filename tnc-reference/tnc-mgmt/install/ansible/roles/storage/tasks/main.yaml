@@ -67,13 +67,20 @@
   changed_when: false
   when: "'odf' in configuration.components"
 
+- name: Get worker node names from cluster
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    get nodes -l node-role.kubernetes.io/worker
+    --no-headers -o custom-columns=NAME:.metadata.name
+  register: worker_nodes
+  changed_when: false
+  when: "'odf' in configuration.components"
+
 - name: Label worker nodes for ODF
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    label node {{ item.hostname }} cluster.ocs.openshift.io/openshift-storage="" --overwrite
-  loop: "{{ hosts | selectattr('role', 'equalto', 'worker') | list }}"
-  loop_control:
-    label: "{{ item.hostname }}"
+    label node {{ item }} cluster.ocs.openshift.io/openshift-storage="" --overwrite
+  loop: "{{ worker_nodes.stdout_lines }}"
   when: "'odf' in configuration.components"
 
 - name: Apply ODF overlay (StorageCluster with patched values)
