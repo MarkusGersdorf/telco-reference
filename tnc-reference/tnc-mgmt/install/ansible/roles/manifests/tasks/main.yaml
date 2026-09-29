@@ -1,0 +1,88 @@
+---
+- name: Clean build directory
+  ansible.builtin.file:
+    path: "{{ build_dir }}"
+    state: absent
+
+- name: Create build directory
+  ansible.builtin.file:
+    path: "{{ build_dir }}/openshift"
+    state: directory
+    mode: "0750"
+
+- name: Generate install-config.yaml
+  ansible.builtin.template:
+    src: install-config.yaml.j2
+    dest: "{{ build_dir }}/install-config.yaml"
+    mode: "0640"
+
+- name: Generate agent-config.yaml
+  ansible.builtin.template:
+    src: agent-config.yaml.j2
+    dest: "{{ build_dir }}/agent-config.yaml"
+    mode: "0640"
+
+- name: Generate cluster network MTU manifest
+  ansible.builtin.template:
+    src: cluster-network-mtu.yaml.j2
+    dest: "{{ build_dir }}/openshift/cluster-network-mtu.yaml"
+    mode: "0640"
+  when: networking.mtu | default(1500) | int > 1500
+
+- name: Generate RAID mirror MachineConfig
+  ansible.builtin.template:
+    src: raid-mirror.yaml.j2
+    dest: "{{ build_dir }}/openshift/98-{{ item }}-raid1-mirror.yaml"
+    mode: "0640"
+  vars:
+    role: "{{ item }}"
+  loop: "{{ hosts | map(attribute='role') | unique | list }}"
+  when: raid_enabled | bool
+
+- name: Read the rendered RAID MachineConfig
+  ansible.builtin.slurp:
+    src: "{{ build_dir }}/openshift/98-{{ item }}-raid1-mirror.yaml"
+  register: raid_mc_rendered
+  loop: "{{ hosts | map(attribute='role') | unique | list }}"
+  when: raid_enabled | bool
+
+- name: Confirm the MachineConfig formats both mirrored arrays
+  ansible.builtin.assert:
+    that:
+      - mc_yaml.spec.config.storage.raid | map(attribute='name') | sort == ['md-boot', 'md-root']
+      - "'/dev/md/md-root' in mc_fs_devices"
+      - "'/dev/md/md-boot' in mc_fs_devices"
+      - mc_yaml.spec.config.storage.disks | length == storage.os_disks | length
+    fail_msg: >-
+      {{ item.item }} RAID MachineConfig does not format both mirrored
+      arrays. An array without a filesystem leaves dracut unable to find
+      root, which drops the node into an emergency shell on first boot.
+    success_msg: >-
+      {{ item.item }}: md-root and md-boot both formatted across
+      {{ storage.os_disks | length }} disks
+  vars:
+    mc_yaml: "{{ item.content | b64decode | from_yaml }}"
+    mc_fs_devices: "{{ mc_yaml.spec.config.storage.filesystems | map(attribute='device') | list }}"
+  loop: "{{ raid_mc_rendered.results }}"
+  loop_control:
+    label: "{{ item.item | default('') }}"
+  when: raid_enabled | bool
+
+- name: Copy disconnected install manifests
+  ansible.builtin.copy:
+    src: "{{ extra_manifests_dir }}/"
+    dest: "{{ build_dir }}/openshift/"
+    mode: "0640"
+  when: disconnected | bool
+
+- name: Generate agent ISO
+  ansible.builtin.command: "{{ installer_binary }} --dir {{ build_dir }} agent create image"
+
+- name: Copy ISO to HTTP server
+  ansible.builtin.copy:
+    src: "{{ build_dir }}/agent.x86_64.iso"
+    dest: "{{ bmc.iso_server_path }}/agent.x86_64.iso"
+    remote_src: true
+    mode: "0644"
+  become: true
+  when: bmc.iso_server_path is defined

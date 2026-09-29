@@ -89,6 +89,80 @@ wipe:
 #     REDACTED
 #     -----END CERTIFICATE-----
 
+# Day-2 configuration — all values consumed by the "Configure" phase of
+# playbook.yaml. Overlay files in the repo are never modified; the playbook
+# copies the configuration tree to a staging area, templates patches there,
+# and applies with kustomize build.
+configuration:
+  # Components to include in kustomization.yaml. Comment out any line to
+  # exclude that component entirely.
+  components:
+    - talm
+    - lso
+    - odf
+    - gitops
+    - acm
+    - vault
+    - quay
+    - logging
+    - cnv
+    # - registry        # disconnected only
+    # - kafka
+    # - monitoring-kafka
+    # - gitops-ztp
+
+  # Operator catalog source — connected clusters use redhat-operators;
+  # disconnected use redhat-operators-disconnected (must match your CatalogSource)
+  catalog_source: redhat-operators
+
+  # GitLab instance deployed on this cluster (before ArgoCD, needs ODF)
+  gitlab:
+    group: telco
+    project: telco-reference
+    storage_class: ocs-storagecluster-cephfs
+    block_storage_class: ocs-storagecluster-ceph-rbd
+    gitaly_size: "50Gi"
+    postgresql_size: "8Gi"
+    redis_size: "5Gi"
+
+  # Git repo for ArgoCD to sync from (auto-populated from GitLab config above)
+  gitops:
+    branch: tnc7.0-release-4.22
+
+  # ODF / LSO storage on worker nodes
+  odf:
+    disk_paths:
+      - /dev/nvme2n1
+      - /dev/nvme3n1
+      - /dev/nvme4n1
+      - /dev/nvme5n1
+      - /dev/nvme6n1
+    storage_size: "3500Gi"
+    storage_class: local-sc
+    default_storage_class: ocs-storagecluster-ceph-rbd
+    filesystem_storage_class: ocs-storagecluster-cephfs
+
+  # ACM AgentServiceConfig — OS images for spoke cluster provisioning
+  acm:
+    os_images:
+      - cpu_architecture: x86_64
+        openshift_version: "4.22"
+        rootfs_url: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.22/latest/rhcos-live-rootfs.x86_64.img
+        iso_url: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.22/latest/rhcos-live.x86_64.iso
+        version: "9.8.20260428-0"
+
+  # Vault (ExternalSecrets ClusterSecretStore)
+  vault:
+    server: https://vault-server.apps.mgmt1.example.com
+    mount_path: kubernetes-mgmt1
+    role: mgmt1
+    secret_path: ztp/mgmt1
+    # CA bundle — uncomment and paste when Vault uses a private CA
+    # ca_bundle: |
+    #   -----BEGIN CERTIFICATE-----
+    #   REDACTED
+    #   -----END CERTIFICATE-----
+
 bmc:
   iso_url: http://bastion.example.com:8080/agent.x86_64.iso
   iso_server_path: /var/www/html

@@ -1,0 +1,54 @@
+---
+- name: Validate host count
+  ansible.builtin.assert:
+    that:
+      - hosts | selectattr('role', 'equalto', 'master') | list | length == 3
+      - hosts | selectattr('role', 'equalto', 'worker') | list | length >= 0
+    fail_msg: "Exactly 3 master nodes are required"
+
+- name: Validate interface layout has bond0 interfaces
+  ansible.builtin.assert:
+    that:
+      - interface_layout[item] | selectattr('bond', 'equalto', 'bond0') | list | length >= 1
+    fail_msg: "interface_layout.{{ item }} must have at least one interface in bond0"
+  loop: "{{ interface_layout | list }}"
+
+- name: Validate each host has correct number of MACs
+  ansible.builtin.assert:
+    that:
+      - item.macs | length == interface_layout[item.role] | length
+    fail_msg: "Host {{ item.hostname }} has {{ item.macs | length }} MACs but interface_layout.{{ item.role }} has {{ interface_layout[item.role] | length }} entries"
+  loop: "{{ hosts }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+
+- name: Validate BMC configuration
+  ansible.builtin.assert:
+    that:
+      - bmc is defined
+      - bmc.iso_url is defined
+      - item.bmc_address is defined
+      - item.bmc_username is defined
+      - item.bmc_password is defined
+    fail_msg: "BMC configuration incomplete for {{ item.hostname }}"
+  loop: "{{ hosts }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+
+- name: Validate OS disks are distinct and exclude data disks
+  ansible.builtin.assert:
+    that:
+      - storage.os_disks | unique | length == storage.os_disks | length
+      - storage.os_disks | intersect(item.data_disks | default([])) | length == 0
+      - storage.os_disks | intersect((wipe | default({}, true)).data_disks | default([])) | length == 0
+    fail_msg: >-
+      storage.os_disks {{ storage.os_disks }} must contain no duplicates and
+      must not overlap the data disks for {{ item.hostname }}
+      ({{ item.data_disks | default((wipe | default({}, true)).data_disks | default([])) }}).
+    success_msg: >-
+      {{ item.hostname }}: os_disks {{ storage.os_disks | join(', ') }} are
+      distinct and exclude all data disks
+  loop: "{{ hosts }}"
+  loop_control:
+    label: "{{ item.hostname }}"
+  when: storage is defined and storage.os_disks is defined

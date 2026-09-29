@@ -1,0 +1,40 @@
+---
+- name: Install OpenShift GitOps operator
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }} apply
+    -f {{ config_stage_dir }}/reference-crs/required/gitops/clusterrole.yaml
+    -f {{ config_stage_dir }}/reference-crs/required/gitops/clusterrolebinding.yaml
+    -f {{ config_stage_dir }}/reference-crs/required/gitops/gitopsNS.yaml
+    -f {{ config_stage_dir }}/reference-crs/required/gitops/gitopsOperatorGroup.yaml
+    -f {{ config_stage_dir }}/reference-crs/required/gitops/gitopsSubscription.yaml
+
+- name: Wait for GitOps operator to be ready
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n openshift-gitops-operator get subscriptions.operators.coreos.com
+    openshift-gitops-operator -o jsonpath='{.status.state}'
+  register: gitops_state
+  until: gitops_state.stdout == "AtLatestKnown"
+  retries: 30
+  delay: 20
+  changed_when: false
+
+- name: Wait for ArgoCD pods to be ready
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n openshift-gitops wait --for=condition=Ready pod
+    --all --timeout=300s
+  changed_when: false
+
+- name: Apply full configuration via kustomize
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -k {{ config_stage_dir }}
+
+- name: Deployment complete
+  ansible.builtin.debug:
+    msg:
+      - "Cluster {{ cluster.name }}.{{ cluster.base_domain }} fully configured"
+      - "Components: {{ configuration.components | join(', ') }}"
+      - "GitLab: https://{{ gitlab_host }}"
+      - "ArgoCD repo: {{ gitlab_repo_url }}"

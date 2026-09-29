@@ -1,0 +1,7 @@
+---
+- op: replace
+  path: "/spec/storageClassDevices/0/devicePaths"
+  value:
+{% for disk in configuration.odf.disk_paths %}
+    - {{ disk }}
+{% endfor %}

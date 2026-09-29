@@ -1,0 +1,35 @@
+---
+- op: add
+  path: /metadata/annotations
+  value:
+    unsupported.agent-install.openshift.io/assisted-service-allow-unrestricted-image-pulls: "true"
+    argocd.argoproj.io/sync-wave: "-10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+
+- op: replace
+  path: /spec/databaseStorage/storageClassName
+  value: "{{ configuration.odf.filesystem_storage_class }}"
+
+- op: replace
+  path: /spec/filesystemStorage/storageClassName
+  value: "{{ configuration.odf.filesystem_storage_class }}"
+
+- op: replace
+  path: /spec/imageStorage/storageClassName
+  value: "{{ configuration.odf.filesystem_storage_class }}"
+
+- op: replace
+  path: "/spec/osImages"
+  value:
+{% for img in configuration.acm.os_images %}
+    - cpuArchitecture: "{{ img.cpu_architecture }}"
+      openshiftVersion: "{{ img.openshift_version }}"
+      rootFSUrl: {{ img.rootfs_url }}
+      url: {{ img.iso_url }}
+      version: "{{ img.version }}"
+{% endfor %}
+{% if mirror_registry is not defined %}
+
+- op: remove
+  path: /spec/mirrorRegistryRef
+{% endif %}

@@ -1,0 +1,46 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+{% if 'talm' in configuration.components %}
+  - reference-crs/required/talm/
+{% endif %}
+{% if 'lso' in configuration.components %}
+  - overlays/lso/
+{% endif %}
+{% if 'odf' in configuration.components %}
+  - overlays/odf/
+{% endif %}
+{% if 'gitops' in configuration.components %}
+  - overlays/gitops/
+{% endif %}
+{% if 'acm' in configuration.components %}
+  - overlays/acm/
+{% endif %}
+{% if 'registry' in configuration.components %}
+  - overlays/registry/
+{% endif %}
+{% if 'vault' in configuration.components %}
+  - overlays/vault/
+{% endif %}
+{% if 'quay' in configuration.components %}
+  - overlays/quay/
+{% endif %}
+{% if 'kafka' in configuration.components %}
+  - overlays/kafka/
+{% endif %}
+{% if 'logging' in configuration.components %}
+  - overlays/logging
+{% endif %}
+{% if 'monitoring-kafka' in configuration.components %}
+  - overlays/monitoring-kafka
+{% endif %}
+{% if 'gitops-ztp' in configuration.components %}
+  - overlays/gitops-ztp/
+{% endif %}
+{% if 'ansible' in configuration.components %}
+  - other-crs/optional/ansible/
+{% endif %}
+{% if 'cnv' in configuration.components %}
+  - other-crs/optional/cnv/
+{% endif %}

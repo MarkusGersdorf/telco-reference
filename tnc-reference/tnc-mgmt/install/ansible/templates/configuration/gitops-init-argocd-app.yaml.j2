@@ -1,0 +1,7 @@
+---
+- op: replace
+  path: "/spec/source"
+  value:
+    path: "tnc-reference/tnc-mgmt/configuration"
+    repoURL: "{{ configuration.gitops.repo_url | default('https://placeholder.example.com/repo.git') }}"
+    targetRevision: "{{ configuration.gitops.branch }}"
