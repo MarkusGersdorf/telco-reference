@@ -68,7 +68,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n open-cluster-management get subscriptions.operators.coreos.com
-    advanced-cluster-management -o jsonpath='{.status.state}'
+    open-cluster-management-subscription -o jsonpath='{.status.state}'
   register: acm_state
   until: acm_state.stdout == "AtLatestKnown"
   retries: 30
