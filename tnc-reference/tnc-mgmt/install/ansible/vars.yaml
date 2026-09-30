@@ -192,6 +192,8 @@ configuration:
     data_storage_size: "10Gi"
     audit_storage_size: "5Gi"
     license: "REDACTED"
+    injector_image: hashicorp/vault-k8s
+    injector_image_tag: "1.7.6-ubi"
     injector_replicas: 2
     key_shares: 5
     key_threshold: 3
