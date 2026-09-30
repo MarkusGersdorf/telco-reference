@@ -1,0 +1,32 @@
+---
+- name: Wait for vault-{{ replica_index }} pod to be running
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault get pod vault-{{ replica_index }} -o jsonpath='{.status.phase}'
+  register: replica_phase
+  until: replica_phase.stdout == "Running"
+  retries: 30
+  delay: 20
+  changed_when: false
+
+- name: Join vault-{{ replica_index }} to raft cluster
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-{{ replica_index }} -- vault operator raft join
+    http://vault-0.vault-internal:8200
+  register: raft_join
+  failed_when: raft_join.rc != 0 and 'already part of a cluster' not in raft_join.stderr
+  changed_when: "'already part of a cluster' not in raft_join.stderr"
+
+- name: Unseal vault-{{ replica_index }}
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-{{ replica_index }} -- vault operator unseal {{ item }}
+  loop: "{{ vault_unseal_keys[:configuration.vault_server.key_threshold | int] }}"
+  no_log: true
+
+- name: Wait for vault-{{ replica_index }} to be ready
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault wait --for=condition=Ready pod/vault-{{ replica_index }} --timeout=120s
+  changed_when: false

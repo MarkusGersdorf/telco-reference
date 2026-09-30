@@ -1,0 +1,172 @@
+---
+- name: Create vault namespace
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    create namespace vault --dry-run=client -o yaml
+  register: vault_ns_yaml
+
+- name: Apply vault namespace
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }} apply -f -
+  args:
+    stdin: "{{ vault_ns_yaml.stdout }}"
+
+- name: Create Vault Enterprise license secret
+  ansible.builtin.shell: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault create secret generic vault-ent-license
+    --from-literal=license={{ configuration.vault_server.license }}
+    --dry-run=client -o yaml |
+    oc --kubeconfig {{ kubeconfig_path }} apply -f -
+  no_log: true
+
+- name: Add HashiCorp Helm repository
+  ansible.builtin.command: helm repo add hashicorp https://helm.releases.hashicorp.com
+  register: helm_repo
+  changed_when: "'has been added' in helm_repo.stdout"
+  failed_when: helm_repo.rc != 0 and 'already exists' not in helm_repo.stderr
+
+- name: Update Helm repositories
+  ansible.builtin.command: helm repo update hashicorp
+
+- name: Template Vault Helm values
+  ansible.builtin.template:
+    src: configuration/vault-helm-values.yaml.j2
+    dest: "{{ config_stage_dir }}/vault-helm-values.yaml"
+    mode: "0640"
+
+- name: Deploy Vault Enterprise via Helm
+  ansible.builtin.command: >
+    helm upgrade --install vault hashicorp/vault
+    --namespace vault
+    --kubeconfig {{ kubeconfig_path }}
+    --version {{ configuration.vault_server.chart_version }}
+    --values {{ config_stage_dir }}/vault-helm-values.yaml
+
+- name: Template Vault HTTPRoute
+  ansible.builtin.template:
+    src: configuration/vault-httproute.yaml.j2
+    dest: "{{ config_stage_dir }}/vault-httproute.yaml"
+    mode: "0644"
+
+- name: Create Vault HTTPRoute
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/vault-httproute.yaml
+
+- name: Wait for vault-0 pod to be running
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault get pod vault-0 -o jsonpath='{.status.phase}'
+  register: vault_pod_phase
+  until: vault_pod_phase.stdout == "Running"
+  retries: 30
+  delay: 20
+  changed_when: false
+
+# --- Initialize and unseal ---
+
+- name: Check if Vault is initialized
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 -- vault status -format=json
+  register: vault_status
+  failed_when: false
+  changed_when: false
+
+- name: Set Vault init status
+  ansible.builtin.set_fact:
+    vault_initialized: "{{ (vault_status.stdout | from_json).initialized | default(false) }}"
+  when: vault_status.rc in [0, 1, 2]
+
+- name: Initialize Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 -- vault operator init
+    -key-shares={{ configuration.vault_server.key_shares }}
+    -key-threshold={{ configuration.vault_server.key_threshold }}
+    -format=json
+  register: vault_init_result
+  no_log: true
+  when: not vault_initialized | default(false)
+
+- name: Store unseal keys and root token as Kubernetes secret
+  ansible.builtin.shell: |
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n vault create secret generic vault-unseal-keys \
+      --from-literal=init-output='{{ vault_init_result.stdout }}' \
+      --dry-run=client -o yaml | \
+    oc --kubeconfig {{ kubeconfig_path }} apply -f -
+  no_log: true
+  when: vault_init_result is changed
+
+- name: Set unseal keys from init output
+  ansible.builtin.set_fact:
+    vault_unseal_keys: "{{ (vault_init_result.stdout | from_json).unseal_keys_b64 }}"
+  no_log: true
+  when: vault_init_result is changed
+
+- name: Retrieve unseal keys from existing secret
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault get secret vault-unseal-keys
+    -o jsonpath='{.data.init-output}'
+  register: vault_existing_keys
+  no_log: true
+  when: vault_initialized | default(false)
+
+- name: Set unseal keys from existing secret
+  ansible.builtin.set_fact:
+    vault_unseal_keys: "{{ (vault_existing_keys.stdout | b64decode | from_json).unseal_keys_b64 }}"
+  no_log: true
+  when: vault_initialized | default(false)
+
+- name: Unseal vault-0
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 -- vault operator unseal {{ item }}
+  loop: "{{ vault_unseal_keys[:configuration.vault_server.key_threshold | int] }}"
+  no_log: true
+
+- name: Wait for vault-0 to be ready
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault wait --for=condition=Ready pod/vault-0 --timeout=120s
+  changed_when: false
+
+- name: Unseal remaining Vault replicas
+  ansible.builtin.include_tasks: unseal_replica.yaml
+  loop: "{{ range(1, configuration.vault_server.replicas | int) | list }}"
+  loop_control:
+    loop_var: replica_index
+
+# --- Vault Secrets Operator ---
+
+- name: Render vault-secrets-operator manifests
+  ansible.builtin.template:
+    src: configuration/vault-secrets-operator.yaml.j2
+    dest: "{{ config_stage_dir }}/vault-secrets-operator.yaml"
+    mode: "0644"
+
+- name: Install vault-secrets-operator
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/vault-secrets-operator.yaml
+
+- name: Wait for vault-secrets-operator
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault-secrets-operator-system get subscriptions.operators.coreos.com
+    vault-secrets-operator -o jsonpath='{.status.state}'
+  register: vso_state
+  until: vso_state.stdout == "AtLatestKnown"
+  retries: 30
+  delay: 20
+  changed_when: false
+
+- name: Vault deployment complete
+  ansible.builtin.debug:
+    msg:
+      - "Vault Enterprise: vault.apps.{{ cluster.name }}.{{ cluster.base_domain }}"
+      - "Unseal keys stored in secret vault/vault-unseal-keys"
+      - "Vault Secrets Operator: installed"
