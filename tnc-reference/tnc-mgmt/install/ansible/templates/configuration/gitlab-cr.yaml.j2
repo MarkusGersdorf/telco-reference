@@ -10,41 +10,133 @@ spec:
     values:
       certmanager:
         install: false
+      gitlab:
+        toolbox:
+          backups:
+            cron:
+              enabled: true
+              schedule: "{{ configuration.gitlab.backup_schedule }}"
+              extraArgs: "--skip artifacts"
+            objectStorage:
+              config:
+                secret: gitlab-backup-object-storage
+                key: connection
+      gitlab-exporter:
+        enabled: false
       global:
+        appConfig:
+          artifacts:
+            enabled: true
+            bucket: gitlab-artifacts-storage
+          backups:
+            enabled: true
+            bucket: gitlab-backup-storage
+            tmpBucket: gitlab-tmp-storage
+          dependencyProxy:
+            enabled: true
+            bucket: gitlab-dependency-proxy
+          lfs:
+            bucket: gitlab-lfs-storage
+          object_store:
+            enabled: true
+            connection:
+              secret: gitlab-object-storage
+              key: connection
+          omniauth:
+            enabled: true
+            allowSingleSignOn:
+              - openid_connect
+            autoLinkLdapUser: false
+            blockAutoCreatedUsers: true
+            providers:
+              - key: provider
+                secret: gitlab-keycloak
+          packages:
+            enabled: true
+            bucket: gitlab-packages-storage
+          terraformState:
+            enabled: true
+            bucket: gitlab-terraform-state
+          uploads:
+            enabled: true
+            bucket: gitlab-uploads-storage
+        gatewayApi:
+          enabled: false
         hosts:
           domain: apps.{{ cluster.name }}.{{ cluster.base_domain }}
-          https: true
+          pages:
+            name: {{ configuration.gitlab.pages_subdomain }}.apps.{{ cluster.name }}.{{ cluster.base_domain }}
         ingress:
-          configureCertmanager: false
-          provider: openshift
-          class: openshift-default
           annotations:
             route.openshift.io/termination: edge
+          class: none
+          configureCertmanager: false
         minio:
+          enabled: false
+        pages:
           enabled: true
-          persistence:
-            storageClass: {{ configuration.gitlab.block_storage_class }}
-            size: 10Gi
+          accessControl: true
+          host: {{ configuration.gitlab.pages_subdomain }}.apps.{{ cluster.name }}.{{ cluster.base_domain }}
+          namespaceInPath: true
+          objectStore:
+            enabled: true
+            bucket: gitlab-pages-storage
+            connection:
+              secret: gitlab-object-storage
+              key: connection
+        psql:
+          host: {{ configuration.gitlab.psql.host }}
+          port: {{ configuration.gitlab.psql.port }}
+          database: {{ configuration.gitlab.psql.database }}
+          username: {{ configuration.gitlab.psql.username }}
+          password:
+            secret: {{ configuration.gitlab.psql.secret }}
+            key: {{ configuration.gitlab.psql.secret_key }}
+        redis:
+          host: {{ configuration.gitlab.redis.host }}
+          auth:
+            secret: {{ configuration.gitlab.redis.secret }}
+            key: {{ configuration.gitlab.redis.secret_key }}
+        registry:
+          enabled: {{ configuration.gitlab.registry_enabled | lower }}
+        replicaCount: {{ configuration.gitlab.replicas }}
+      metrics:
+        enabled: false
       nginx-ingress:
         enabled: false
-      gitlab:
-        gitaly:
-          persistence:
-            storageClass: {{ configuration.gitlab.storage_class }}
-            size: {{ configuration.gitlab.gitaly_size }}
-        webservice:
-          minReplicas: 1
-        sidekiq:
-          minReplicas: 1
-      registry:
-        hpa:
-          minReplicas: 1
       postgresql:
-        persistence:
-          storageClass: {{ configuration.gitlab.block_storage_class }}
-          size: {{ configuration.gitlab.postgresql_size }}
-      redis:
-        master:
-          persistence:
-            storageClass: {{ configuration.gitlab.block_storage_class }}
-            size: {{ configuration.gitlab.redis_size }}
+        install: false
+      prometheus:
+        install: false
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: gitlab
+  namespace: gitlab-system
+spec:
+  host: gitlab.apps.{{ cluster.name }}.{{ cluster.base_domain }}
+  to:
+    kind: Service
+    name: gitlab-webservice-default
+  port:
+    targetPort: 8181
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: gitlab-pages
+  namespace: gitlab-system
+spec:
+  host: {{ configuration.gitlab.pages_subdomain }}.apps.{{ cluster.name }}.{{ cluster.base_domain }}
+  to:
+    kind: Service
+    name: gitlab-gitlab-pages
+  port:
+    targetPort: 8090
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

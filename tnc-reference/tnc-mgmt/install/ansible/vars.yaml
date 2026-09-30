@@ -133,11 +133,21 @@ configuration:
     chart_version: "10.1.8"
     group: telco
     project: telco-reference
-    storage_class: ocs-storagecluster-cephfs
-    block_storage_class: ocs-storagecluster-ceph-rbd
-    gitaly_size: "50Gi"
-    postgresql_size: "8Gi"
-    redis_size: "5Gi"
+    replicas: 3
+    pages_subdomain: docs
+    registry_enabled: false
+    psql:
+      host: gitlab-postgres-rw
+      port: 5432
+      database: gitlabhq_production
+      username: gitlab
+      secret: gitlab-postgres-app-secret
+      secret_key: password
+    redis:
+      host: gitlab-redis
+      secret: gitlab-redis-secret-custom
+      secret_key: default
+    backup_schedule: "0 1 * * *"
 
   # Git repo for ArgoCD to sync from (auto-populated from GitLab config above)
   gitops:
