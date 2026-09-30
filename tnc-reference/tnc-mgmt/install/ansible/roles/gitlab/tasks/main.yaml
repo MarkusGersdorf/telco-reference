@@ -41,6 +41,16 @@
   delay: 10
   changed_when: false
 
+- name: Wait for GitLab controller manager service
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n gitlab-system get service gitlab-controller-manager-service
+  register: gitlab_svc
+  until: gitlab_svc.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
 - name: Create GitLab instance
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}

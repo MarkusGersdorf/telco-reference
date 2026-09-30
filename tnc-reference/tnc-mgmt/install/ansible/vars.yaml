@@ -127,7 +127,10 @@ configuration:
     # cluster-logging: stable-6.6
 
   # GitLab instance deployed on this cluster (before ArgoCD, needs ODF)
+  # Chart version must match the gitlab-operator version — check with:
+  #   oc -n gitlab-system get csv -o jsonpath='{.items[0].spec.version}'
   gitlab:
+    chart_version: "10.1.8"
     group: telco
     project: telco-reference
     storage_class: ocs-storagecluster-cephfs
