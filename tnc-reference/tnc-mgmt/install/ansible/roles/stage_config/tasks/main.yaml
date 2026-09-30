@@ -47,7 +47,25 @@
     (item.component == '_always' or item.component in configuration.components)
     and (item.requires | default('') == '' or item.requires in configuration.components)
 
-- name: Find all Subscription files in staging area
+- name: Find all YAML files in staging area reference-crs
+  ansible.builtin.find:
+    paths:
+      - "{{ config_stage_dir }}/reference-crs/optional"
+      - "{{ config_stage_dir }}/reference-crs/required"
+    patterns: '*.yaml'
+    recurse: true
+  register: reference_crs_files
+
+- name: Fix catalog source references for connected deployment
+  ansible.builtin.replace:
+    path: "{{ item.path }}"
+    regexp: 'redhat-operators-disconnected'
+    replace: "{{ configuration.catalog_source }}"
+  loop: "{{ reference_crs_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: Find Subscription files for channel overrides
   ansible.builtin.find:
     paths:
       - "{{ config_stage_dir }}/reference-crs/optional"
@@ -55,21 +73,13 @@
     patterns: '*Subscription.yaml'
     recurse: true
   register: subscription_files
-
-- name: Fix catalog source for connected deployment
-  ansible.builtin.replace:
-    path: "{{ item.path }}"
-    regexp: 'source: redhat-operators-disconnected'
-    replace: "source: {{ configuration.catalog_source }}"
-  loop: "{{ subscription_files.files }}"
-  loop_control:
-    label: "{{ item.path | basename }}"
+  when: configuration.channel_overrides is defined
 
 - name: Read operator package name from each Subscription
   ansible.builtin.command: >
     python3 -c "import yaml; print(yaml.safe_load(open('{{ item.path }}'))['spec']['name'])"
   register: subscription_names
-  loop: "{{ subscription_files.files }}"
+  loop: "{{ subscription_files.files | default([]) }}"
   loop_control:
     label: "{{ item.path | basename }}"
   changed_when: false
@@ -80,7 +90,7 @@
     path: "{{ item.item.path }}"
     regexp: 'channel: .*'
     replace: "channel: {{ configuration.channel_overrides[item.stdout] }}"
-  loop: "{{ subscription_names.results }}"
+  loop: "{{ subscription_names.results | default([]) }}"
   loop_control:
     label: "{{ item.item.path | basename }}"
   when:
