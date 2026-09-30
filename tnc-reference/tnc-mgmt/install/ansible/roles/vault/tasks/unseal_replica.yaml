@@ -22,7 +22,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-{{ replica_index }} -- vault operator unseal {{ item }}
-  loop: "{{ vault_unseal_keys[:configuration.vault_server.key_threshold | int] }}"
+  loop: "{{ vault_unseal_keys[:configuration.vault.key_threshold | int] }}"
   no_log: true
 
 - name: Wait for vault-{{ replica_index }} to be ready
