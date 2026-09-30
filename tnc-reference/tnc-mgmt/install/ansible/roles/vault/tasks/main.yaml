@@ -15,7 +15,7 @@
   ansible.builtin.shell: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault create secret generic vault-ent-license
-    --from-literal=license={{ configuration.vault_server.license }}
+    --from-literal=license={{ configuration.vault.license }}
     --dry-run=client -o yaml |
     oc --kubeconfig {{ kubeconfig_path }} apply -f -
   no_log: true
@@ -40,7 +40,7 @@
     helm upgrade --install vault hashicorp/vault
     --namespace vault
     --kubeconfig {{ kubeconfig_path }}
-    --version {{ configuration.vault_server.chart_version }}
+    --version {{ configuration.vault.chart_version }}
     --values {{ config_stage_dir }}/vault-helm-values.yaml
 
 - name: Template Vault HTTPRoute
@@ -83,8 +83,8 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 -- vault operator init
-    -key-shares={{ configuration.vault_server.key_shares }}
-    -key-threshold={{ configuration.vault_server.key_threshold }}
+    -key-shares={{ configuration.vault.key_shares }}
+    -key-threshold={{ configuration.vault.key_threshold }}
     -format=json
   register: vault_init_result
   no_log: true
@@ -125,7 +125,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 -- vault operator unseal {{ item }}
-  loop: "{{ vault_unseal_keys[:configuration.vault_server.key_threshold | int] }}"
+  loop: "{{ vault_unseal_keys[:configuration.vault.key_threshold | int] }}"
   no_log: true
 
 - name: Wait for vault-0 to be ready
@@ -136,7 +136,7 @@
 
 - name: Unseal remaining Vault replicas
   ansible.builtin.include_tasks: unseal_replica.yaml
-  loop: "{{ range(1, configuration.vault_server.replicas | int) | list }}"
+  loop: "{{ range(1, configuration.vault.replicas | int) | list }}"
   loop_control:
     loop_var: replica_index
 

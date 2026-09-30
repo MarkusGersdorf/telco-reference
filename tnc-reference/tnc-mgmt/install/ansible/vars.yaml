@@ -180,10 +180,10 @@ configuration:
         iso_url: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.22/latest/rhcos-live.x86_64.iso
         version: "9.8.20260428-0"
 
-  # Vault Enterprise server deployed on this cluster via Helm.
-  # TLS is handled by OpenShift service serving certificates (auto-created).
-  # External access uses GatewayAPI HTTPRoute.
-  vault_server:
+  # Vault Enterprise — server deployment (Helm) and ClusterSecretStore config.
+  # External access uses GatewayAPI HTTPRoute. API listener runs HTTP;
+  # the gateway handles external TLS.
+  vault:
     chart_version: "0.34.1"
     image: hashicorp/vault-enterprise
     image_tag: "2.0.3-ent-ubi"
@@ -195,10 +195,6 @@ configuration:
     injector_replicas: 2
     key_shares: 5
     key_threshold: 3
-
-  # Vault (ExternalSecrets ClusterSecretStore) — server URL is derived at
-  # runtime from cluster domain once Vault is deployed
-  vault:
     mount_path: kubernetes-mgmt1
     role: mgmt1
     secret_path: ztp/mgmt1
