@@ -5,6 +5,9 @@ global:
     prometheusOperator: true
 
 injector:
+  image:
+    repository: {{ configuration.vault.injector_image }}
+    tag: {{ configuration.vault.injector_image_tag }}
   replicas: {{ configuration.vault.injector_replicas }}
   leaderElector:
     enabled: false
