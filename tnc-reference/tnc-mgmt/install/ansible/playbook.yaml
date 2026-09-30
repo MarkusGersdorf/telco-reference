@@ -44,5 +44,6 @@
   roles:
     - stage_config
     - storage
+    - vault
     - gitlab
     - gitops

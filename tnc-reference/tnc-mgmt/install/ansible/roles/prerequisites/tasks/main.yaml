@@ -57,6 +57,18 @@
   loop_control:
     label: "{{ item.item }}"
 
+- name: Check if helm is present
+  ansible.builtin.command: helm version --short
+  changed_when: false
+  register: helm_check
+  ignore_errors: true
+
+- name: Install helm
+  ansible.builtin.shell: >
+    curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+  become: true
+  when: helm_check.rc != 0
+
 - name: Install prerequisites
   ansible.builtin.dnf:
     name:
