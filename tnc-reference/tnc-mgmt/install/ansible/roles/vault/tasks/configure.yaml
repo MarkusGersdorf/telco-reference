@@ -1,0 +1,114 @@
+---
+- name: Get root token from init output
+  ansible.builtin.set_fact:
+    vault_root_token: "{{ (vault_init_result.stdout | from_json).root_token }}"
+  no_log: true
+  when: vault_init_result is changed
+
+- name: Get root token from existing secret
+  ansible.builtin.set_fact:
+    vault_root_token: "{{ (vault_existing_keys.stdout | b64decode | from_json).root_token }}"
+  no_log: true
+  when: vault_initialized | default(false)
+
+- name: Enable KV v2 secrets engine
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault secrets enable -version=2 -path=secret kv'
+  register: kv_enable
+  failed_when: kv_enable.rc != 0 and 'path is already in use' not in kv_enable.stderr
+  changed_when: kv_enable.rc == 0
+  no_log: true
+
+- name: Enable Kubernetes auth method
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault auth enable kubernetes'
+  register: k8s_auth_enable
+  failed_when: k8s_auth_enable.rc != 0 and 'already in use' not in k8s_auth_enable.stderr
+  changed_when: k8s_auth_enable.rc == 0
+  no_log: true
+
+- name: Configure Kubernetes auth method
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault write auth/kubernetes/config
+    kubernetes_host=https://kubernetes.default.svc:443'
+  no_log: true
+
+- name: Write GitLab read policy
+  ansible.builtin.shell: |
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n vault exec -i vault-0 -- \
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault policy write gitlab-read -' <<'POLICY'
+    path "secret/data/gitlab/*" {
+      capabilities = ["read"]
+    }
+    path "secret/metadata/gitlab/*" {
+      capabilities = ["read", "list"]
+    }
+    POLICY
+  no_log: true
+
+- name: Create Kubernetes auth role for GitLab secrets
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault write
+    auth/kubernetes/role/gitlab-secrets-operator
+    bound_service_account_names=default
+    bound_service_account_namespaces=gitlab-system
+    policies=gitlab-read
+    ttl=1h'
+  no_log: true
+
+- name: Check if PostgreSQL password exists in Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv get -format=json secret/gitlab/postgres'
+  register: vault_postgres_check
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: Generate and write PostgreSQL password to Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }}
+    vault kv put secret/gitlab/postgres
+    password={{ lookup("ansible.builtin.password", "/dev/null length=24 chars=ascii_letters,digits") }}'
+  no_log: true
+  when: vault_postgres_check.rc != 0
+
+- name: Check if Redis password exists in Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv get -format=json secret/gitlab/redis'
+  register: vault_redis_check
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: Generate and write Redis password to Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }}
+    vault kv put secret/gitlab/redis
+    default={{ lookup("ansible.builtin.password", "/dev/null length=24 chars=ascii_letters,digits") }}'
+  no_log: true
+  when: vault_redis_check.rc != 0
+
+- name: Write registry storage placeholder to Vault
+  ansible.builtin.shell: |
+    echo '{{ {"config": "s3: {}"} | to_json }}' | \
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n vault exec -i vault-0 -- \
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put secret/gitlab/registry-storage @/dev/stdin'
+  no_log: true

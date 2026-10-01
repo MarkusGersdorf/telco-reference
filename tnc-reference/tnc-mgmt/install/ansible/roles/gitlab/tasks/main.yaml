@@ -20,6 +20,9 @@
     -f {{ config_stage_dir }}/gitlab-namespace.yaml
     -f {{ config_stage_dir }}/gitlab-subscription.yaml
 
+- name: Deploy GitLab prerequisites (NooBaa, S3, Vault secrets, PostgreSQL, Redis)
+  ansible.builtin.include_tasks: prerequisites.yaml
+
 - name: Wait for GitLab operator
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
