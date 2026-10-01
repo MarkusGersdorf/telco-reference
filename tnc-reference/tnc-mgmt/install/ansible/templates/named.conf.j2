@@ -25,7 +25,7 @@ controls { };
 {% for zone in dns_zones %}
 zone "{{ zone }}" IN {
     type primary;
-    file "/var/named/{{ zone }}.zone";
+    file "/var/named/zones/{{ zone }}.zone";
 };
 
 {% endfor %}
