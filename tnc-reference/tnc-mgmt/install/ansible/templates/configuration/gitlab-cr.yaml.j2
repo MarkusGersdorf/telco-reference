@@ -99,6 +99,10 @@ spec:
             key: {{ configuration.gitlab.redis.secret_key }}
         registry:
           enabled: {{ configuration.gitlab.registry_enabled | lower }}
+          storage:
+            secret: gitlab-object-storage
+            key: connection
+          bucket: gitlab-registry-storage
         replicaCount: {{ configuration.gitlab.replicas }}
       metrics:
         enabled: false
