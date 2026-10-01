@@ -143,7 +143,7 @@ configuration:
     registry_enabled: false
     keycloak_enabled: false
     postgres:
-      image: registry.redhat.io/rhel9/postgresql-16
+      image: registry.redhat.io/rhel9/postgresql-18
       image_tag: "latest"
       storage_size: "10Gi"
       storage_class: ocs-storagecluster-ceph-rbd
