@@ -84,7 +84,7 @@
     podman run -d --name dns-server
     --publish 53:8053/udp --publish 53:8053/tcp
     -v {{ dns_dir }}/named.conf:/etc/named/hbird-defaults.conf:ro,Z
-    -v {{ dns_dir }}/zones:/var/named:ro,Z
+    -v {{ dns_dir }}/zones:/var/named/zones:ro,Z
     registry.access.redhat.com/hi/bind:latest
   become: true
   when: dns_needs_restart | bool
