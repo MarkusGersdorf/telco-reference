@@ -1,0 +1,74 @@
+---
+# Retrieve MAC addresses from Supermicro BMCs via Redfish.
+#
+#   ansible-playbook get-macs.yaml
+#   ansible-playbook get-macs.yaml -e cluster_vars=vars-hub01.yaml
+
+- name: Get MAC addresses from Supermicro BMCs
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ cluster_vars | default('vars.yaml') }}"
+
+  tasks:
+    - name: Query EthernetInterfaces collection from each BMC
+      ansible.builtin.uri:
+        url: "https://{{ item.bmc_address }}/redfish/v1/Systems/1/EthernetInterfaces"
+        method: GET
+        user: "{{ item.bmc_username }}"
+        password: "{{ item.bmc_password }}"
+        force_basic_auth: true
+        validate_certs: false
+      register: nic_collections
+      loop: "{{ hosts }}"
+      loop_control:
+        label: "{{ item.hostname }}"
+
+    - name: Build flat list of NIC queries
+      ansible.builtin.set_fact:
+        nic_queries: "{{ _queries }}"
+      vars:
+        _queries: >-
+          {% set result = [] %}
+          {% for col in nic_collections.results %}
+          {% for member in col.json.Members %}
+          {% set _ = result.append({
+               'hostname': col.item.hostname,
+               'bmc_address': col.item.bmc_address,
+               'bmc_username': col.item.bmc_username,
+               'bmc_password': col.item.bmc_password,
+               'path': member['@odata.id']
+             }) %}
+          {% endfor %}
+          {% endfor %}
+          {{ result }}
+
+    - name: Query each NIC for MAC address
+      ansible.builtin.uri:
+        url: "https://{{ item.bmc_address }}{{ item.path }}"
+        method: GET
+        user: "{{ item.bmc_username }}"
+        password: "{{ item.bmc_password }}"
+        force_basic_auth: true
+        validate_certs: false
+      register: nic_details
+      loop: "{{ nic_queries }}"
+      loop_control:
+        label: "{{ item.hostname }} {{ item.path | basename }}"
+
+    - name: Display MAC addresses per host
+      ansible.builtin.debug:
+        msg: "{{ _summary }}"
+      vars:
+        _summary: >-
+          {% set ns = namespace(current='') %}
+          {% for r in nic_details.results %}
+          {% if r.item.hostname != ns.current %}
+          {% set ns.current = r.item.hostname %}
+
+          {{ r.item.hostname }} (BMC {{ r.item.bmc_address }}):
+          {% endif %}
+            {{ '%-20s' | format(r.json.Name | default(r.json.Id)) }}  {{ r.json.MACAddress | default('N/A') }}  {{ r.json.Description | default('') }}
+          {% endfor %}
