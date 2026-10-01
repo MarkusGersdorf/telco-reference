@@ -221,9 +221,9 @@ configuration:
     injector_replicas: 2
     key_shares: 5
     key_threshold: 3
-    mount_path: kubernetes
-    role: external-secrets-reader
-    secret_path: secret
+    mount_path: kubernetes-mgmt1
+    role: mgmt1
+    secret_path: ztp/mgmt1
     # CA bundle — uncomment and paste when Vault uses a private CA
     # ca_bundle: |
     #   -----BEGIN CERTIFICATE-----

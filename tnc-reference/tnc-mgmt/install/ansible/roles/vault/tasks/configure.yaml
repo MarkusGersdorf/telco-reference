@@ -15,7 +15,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
-    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault secrets enable -version=2 -path=secret kv'
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault secrets enable -version=2 -path={{ configuration.vault.secret_path }} kv'
   register: kv_enable
   failed_when: kv_enable.rc != 0 and 'path is already in use' not in kv_enable.stderr
   changed_when: kv_enable.rc == 0
@@ -25,7 +25,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
-    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault auth enable kubernetes'
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault auth enable -path={{ configuration.vault.mount_path }} kubernetes'
   register: k8s_auth_enable
   failed_when: k8s_auth_enable.rc != 0 and 'already in use' not in k8s_auth_enable.stderr
   changed_when: k8s_auth_enable.rc == 0
@@ -35,7 +35,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
-    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault write auth/kubernetes/config
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault write auth/{{ configuration.vault.mount_path }}/config
     kubernetes_host=https://kubernetes.default.svc:443'
   no_log: true
 
@@ -44,10 +44,10 @@
     oc --kubeconfig {{ kubeconfig_path }} \
       -n vault exec -i vault-0 -- \
       sh -c 'VAULT_TOKEN={{ vault_root_token }} vault policy write eso-read -' <<'POLICY'
-    path "secret/data/*" {
+    path "{{ configuration.vault.secret_path }}/data/*" {
       capabilities = ["read"]
     }
-    path "secret/metadata/*" {
+    path "{{ configuration.vault.secret_path }}/metadata/*" {
       capabilities = ["read", "list"]
     }
     POLICY
@@ -58,7 +58,7 @@
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
     sh -c 'VAULT_TOKEN={{ vault_root_token }} vault write
-    auth/kubernetes/role/{{ configuration.vault.role }}
+    auth/{{ configuration.vault.mount_path }}/role/{{ configuration.vault.role }}
     bound_service_account_names=external-secrets
     bound_service_account_namespaces=external-secrets
     policies=eso-read
@@ -69,7 +69,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
-    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv get -format=json secret/gitlab/postgres'
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv get -format=json {{ configuration.vault.secret_path }}/gitlab/postgres'
   register: vault_postgres_check
   failed_when: false
   changed_when: false
@@ -80,7 +80,7 @@
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
     sh -c 'VAULT_TOKEN={{ vault_root_token }}
-    vault kv put secret/gitlab/postgres
+    vault kv put {{ configuration.vault.secret_path }}/gitlab/postgres
     password={{ lookup("ansible.builtin.password", "/dev/null length=24 chars=ascii_letters,digits") }}'
   no_log: true
   when: vault_postgres_check.rc != 0
@@ -89,7 +89,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
-    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv get -format=json secret/gitlab/redis'
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv get -format=json {{ configuration.vault.secret_path }}/gitlab/redis'
   register: vault_redis_check
   failed_when: false
   changed_when: false
@@ -100,7 +100,7 @@
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
     sh -c 'VAULT_TOKEN={{ vault_root_token }}
-    vault kv put secret/gitlab/redis
+    vault kv put {{ configuration.vault.secret_path }}/gitlab/redis
     default={{ lookup("ansible.builtin.password", "/dev/null length=24 chars=ascii_letters,digits") }}'
   no_log: true
   when: vault_redis_check.rc != 0
@@ -110,7 +110,7 @@
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
     sh -c 'VAULT_TOKEN={{ vault_root_token }}
-    vault kv put secret/certmanager/dns-credentials
+    vault kv put {{ configuration.vault.secret_path }}/certmanager/dns-credentials
     apiToken={{ configuration.certmanager.dns_provider.username }}
     apiSecret={{ configuration.certmanager.dns_provider.password }}'
   no_log: true
