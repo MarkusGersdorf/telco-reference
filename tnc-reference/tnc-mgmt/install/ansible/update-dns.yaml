@@ -1,0 +1,14 @@
+---
+- name: Add DNS zone without losing existing zones
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - "{{ cluster_vars | default('vars.yaml') }}"
+
+  vars:
+    dns_dir: /opt/dns
+
+  roles:
+    - dns

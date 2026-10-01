@@ -6,11 +6,11 @@
   tags: [install]
 
   vars_files:
-    - vars.yaml
+    - "{{ cluster_vars | default('vars.yaml') }}"
 
   vars:
     build_dir: "{{ playbook_dir }}/../build"
-    dns_dir: "{{ playbook_dir }}/../dns"
+    dns_dir: /opt/dns
     extra_manifests_dir: "{{ playbook_dir }}/../openshift/openshift"
     installer_binary: openshift-install
     raid_enabled: "{{ storage is defined and storage.os_disks is defined and storage.os_disks | length > 1 }}"
@@ -31,7 +31,7 @@
   tags: [configure]
 
   vars_files:
-    - vars.yaml
+    - "{{ cluster_vars | default('vars.yaml') }}"
 
   vars:
     build_dir: "{{ playbook_dir }}/../build"
