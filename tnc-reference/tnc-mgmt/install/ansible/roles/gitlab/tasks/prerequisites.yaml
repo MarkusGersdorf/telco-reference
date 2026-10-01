@@ -116,7 +116,7 @@
     echo '{{ {"connection": gitlab_s3_connection} | to_json }}' | \
     oc --kubeconfig {{ kubeconfig_path }} \
       -n vault exec -i vault-0 -- \
-      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put secret/gitlab/object-storage @/dev/stdin'
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put {{ configuration.vault.secret_path }}/gitlab/object-storage @/dev/stdin'
   no_log: true
 
 - name: Write backup object storage connection to Vault
@@ -124,7 +124,7 @@
     echo '{{ {"connection": gitlab_s3_connection} | to_json }}' | \
     oc --kubeconfig {{ kubeconfig_path }} \
       -n vault exec -i vault-0 -- \
-      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put secret/gitlab/backup-object-storage @/dev/stdin'
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put {{ configuration.vault.secret_path }}/gitlab/backup-object-storage @/dev/stdin'
   no_log: true
 
 - name: Set registry storage config
@@ -145,7 +145,7 @@
     echo '{{ {"config": gitlab_registry_config} | to_json }}' | \
     oc --kubeconfig {{ kubeconfig_path }} \
       -n vault exec -i vault-0 -- \
-      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put secret/gitlab/registry-storage @/dev/stdin'
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put {{ configuration.vault.secret_path }}/gitlab/registry-storage @/dev/stdin'
   no_log: true
 
 # --- ExternalSecrets (Vault via ESO) ---
