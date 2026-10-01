@@ -8,7 +8,7 @@
     - "{{ cluster_vars | default('vars.yaml') }}"
 
   vars:
-    dns_dir: "{{ playbook_dir }}/../dns"
+    dns_dir: /opt/dns
 
   roles:
     - dns

@@ -1,20 +1,23 @@
 ---
-- name: Create DNS config directory
+- name: Create DNS directories
   ansible.builtin.file:
-    path: "{{ dns_dir }}"
+    path: "{{ item }}"
     state: directory
     mode: "0755"
+  loop:
+    - "{{ dns_dir }}"
+    - "{{ dns_dir }}/zones"
 
 - name: Generate zone file for this cluster
   ansible.builtin.template:
     src: zone.db.j2
-    dest: "{{ dns_dir }}/{{ cluster.name }}.{{ cluster.base_domain }}.zone"
+    dest: "{{ dns_dir }}/zones/{{ cluster.name }}.{{ cluster.base_domain }}.zone"
     mode: "0644"
   register: zone_updated
 
-- name: Discover all zone files in dns directory
+- name: Discover all zone files in zones directory
   ansible.builtin.find:
-    paths: "{{ dns_dir }}"
+    paths: "{{ dns_dir }}/zones"
     patterns: "*.zone"
   register: zone_files_found
 
@@ -70,7 +73,7 @@
     podman run -d --name dns-server
     --publish 53:8053/udp --publish 53:8053/tcp
     -v {{ dns_dir }}/named.conf:/etc/named/hbird-defaults.conf:ro,Z
-    -v {{ dns_dir }}:/var/named:ro,Z
+    -v {{ dns_dir }}/zones:/var/named:ro,Z
     registry.access.redhat.com/hi/bind:latest
   become: true
   when: dns_needs_restart | bool
