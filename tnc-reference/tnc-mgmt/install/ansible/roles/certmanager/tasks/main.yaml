@@ -1,0 +1,120 @@
+---
+- name: Render cert-manager manifests
+  ansible.builtin.template:
+    src: "configuration/{{ item.src }}"
+    dest: "{{ config_stage_dir }}/{{ item.dest }}"
+    mode: "0644"
+  loop:
+    - src: cert-manager-subscription.yaml.j2
+      dest: cert-manager-subscription.yaml
+    - src: certmanager-dns-webhook.yaml.j2
+      dest: certmanager-dns-webhook.yaml
+    - src: certmanager-dns-credentials-es.yaml.j2
+      dest: certmanager-dns-credentials-es.yaml
+    - src: certmanager-clusterissuer.yaml.j2
+      dest: certmanager-clusterissuer.yaml
+    - src: certmanager-wildcard-cert.yaml.j2
+      dest: certmanager-wildcard-cert.yaml
+  loop_control:
+    label: "{{ item.dest }}"
+
+- name: Install cert-manager operator
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/cert-manager-subscription.yaml
+
+- name: Wait for cert-manager CRDs
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    get crd {{ item }}
+  register: certmgr_crd
+  until: certmgr_crd.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  loop:
+    - issuers.cert-manager.io
+    - clusterissuers.cert-manager.io
+    - certificates.cert-manager.io
+
+- name: Wait for cert-manager controller
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n cert-manager wait --for=condition=Available
+    deployment/cert-manager --timeout=300s
+  changed_when: false
+
+- name: Wait for cert-manager webhook
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n cert-manager wait --for=condition=Available
+    deployment/cert-manager-webhook --timeout=300s
+  changed_when: false
+
+# --- DNS credentials from Vault via ESO ---
+
+- name: Sync DNS API credentials from Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/certmanager-dns-credentials-es.yaml
+
+- name: Wait for DNS credentials secret
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n cert-manager get secret dns-api-credentials
+  register: dns_creds_check
+  until: dns_creds_check.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+# --- DNS webhook solver ---
+
+- name: Deploy DNS webhook solver
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/certmanager-dns-webhook.yaml
+
+- name: Wait for webhook TLS certificate
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n cert-manager get secret dns-webhook-tls
+  register: webhook_tls_check
+  until: webhook_tls_check.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Wait for DNS webhook deployment
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n cert-manager wait --for=condition=Available
+    deployment/dns-webhook --timeout=300s
+  changed_when: false
+
+# --- ClusterIssuer and wildcard certificate ---
+
+- name: Create Let's Encrypt ClusterIssuer
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/certmanager-clusterissuer.yaml
+
+- name: Create wildcard certificate
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/certmanager-wildcard-cert.yaml
+
+- name: Wait for wildcard certificate to be issued
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n openshift-ingress get certificate ingress-wildcard-cert
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  register: cert_ready
+  until: cert_ready.stdout == "True"
+  retries: 60
+  delay: 30
+  changed_when: false
+
+- name: Wildcard certificate ready
+  ansible.builtin.debug:
+    msg: "Wildcard TLS certificate issued for *.apps.{{ cluster.name }}.{{ cluster.base_domain }}"

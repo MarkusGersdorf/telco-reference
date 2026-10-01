@@ -1,0 +1,210 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dns-webhook
+  namespace: cert-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dns-webhook:webhook-authentication-reader
+  namespace: kube-system
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: extension-apiserver-authentication-reader
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: dns-webhook
+    namespace: cert-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dns-webhook:auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: dns-webhook
+    namespace: cert-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dns-webhook:domain-solver
+rules:
+  - apiGroups:
+      - {{ configuration.certmanager.webhook.group_name }}
+    resources:
+      - '*'
+    verbs:
+      - 'create'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dns-webhook:domain-solver
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dns-webhook:domain-solver
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: cert-manager
+    namespace: cert-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: dns-webhook:secret-reader
+  namespace: cert-manager
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: dns-webhook:secret-reader
+  namespace: cert-manager
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: dns-webhook:secret-reader
+subjects:
+  - apiGroup: ""
+    kind: ServiceAccount
+    name: dns-webhook
+    namespace: cert-manager
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: dns-webhook-selfsign
+  namespace: cert-manager
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dns-webhook-ca
+  namespace: cert-manager
+spec:
+  secretName: dns-webhook-ca
+  duration: 43800h
+  issuerRef:
+    name: dns-webhook-selfsign
+  commonName: ca.dns-webhook.cert-manager
+  isCA: true
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: dns-webhook-ca
+  namespace: cert-manager
+spec:
+  ca:
+    secretName: dns-webhook-ca
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: dns-webhook-tls
+  namespace: cert-manager
+spec:
+  secretName: dns-webhook-tls
+  duration: 8760h
+  issuerRef:
+    name: dns-webhook-ca
+  dnsNames:
+    - dns-webhook
+    - dns-webhook.cert-manager
+    - dns-webhook.cert-manager.svc
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dns-webhook
+  namespace: cert-manager
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dns-webhook
+  template:
+    metadata:
+      labels:
+        app: dns-webhook
+    spec:
+      serviceAccountName: dns-webhook
+      containers:
+        - name: dns-webhook
+          image: {{ configuration.certmanager.webhook.image }}:{{ configuration.certmanager.webhook.image_tag }}
+          imagePullPolicy: Always
+          args:
+            - --tls-cert-file=/tls/tls.crt
+            - --tls-private-key-file=/tls/tls.key
+          env:
+            - name: GROUP_NAME
+              value: {{ configuration.certmanager.webhook.group_name }}
+          ports:
+            - name: https
+              containerPort: 443
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
+              port: https
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: /healthz
+              port: https
+          volumeMounts:
+            - name: certs
+              mountPath: /tls
+              readOnly: true
+      volumes:
+        - name: certs
+          secret:
+            secretName: dns-webhook-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dns-webhook
+  namespace: cert-manager
+spec:
+  type: ClusterIP
+  ports:
+    - port: 443
+      targetPort: https
+      protocol: TCP
+      name: https
+  selector:
+    app: dns-webhook
+---
+apiVersion: apiregistration.k8s.io/v1
+kind: APIService
+metadata:
+  name: v1alpha1.{{ configuration.certmanager.webhook.group_name }}
+  annotations:
+    cert-manager.io/inject-ca-from: cert-manager/dns-webhook-tls
+spec:
+  group: {{ configuration.certmanager.webhook.group_name }}
+  groupPriorityMinimum: 1000
+  versionPriority: 15
+  service:
+    name: dns-webhook
+    namespace: cert-manager
+  version: v1alpha1

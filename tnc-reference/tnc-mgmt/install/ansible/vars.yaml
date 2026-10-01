@@ -131,6 +131,21 @@ configuration:
     # advanced-cluster-management: release-2.17
     # cluster-logging: stable-6.6
 
+  # cert-manager — wildcard TLS via Let's Encrypt DNS-01 challenge.
+  # The webhook solver image and solver/group names are provider-specific;
+  # set them to match whatever DNS webhook you deploy.
+  certmanager:
+    email: REDACTED
+    dns_provider:
+      api_url: https://REDACTED/v0
+      username: REDACTED
+      password: REDACTED
+    webhook:
+      image: REDACTED
+      image_tag: latest
+      group_name: REDACTED
+      solver_name: REDACTED
+
   # GitLab instance deployed on this cluster (before ArgoCD, needs ODF)
   # Chart version must match the gitlab-operator version — check with:
   #   oc -n gitlab-system get csv -o jsonpath='{.items[0].spec.version}'
@@ -206,9 +221,9 @@ configuration:
     injector_replicas: 2
     key_shares: 5
     key_threshold: 3
-    mount_path: kubernetes-mgmt1
-    role: mgmt1
-    secret_path: ztp/mgmt1
+    mount_path: kubernetes
+    role: external-secrets-reader
+    secret_path: secret
     # CA bundle — uncomment and paste when Vault uses a private CA
     # ca_bundle: |
     #   -----BEGIN CERTIFICATE-----

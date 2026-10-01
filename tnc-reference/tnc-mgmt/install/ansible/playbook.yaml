@@ -45,5 +45,6 @@
     - stage_config
     - storage
     - vault
+    - certmanager
     - gitlab
     - gitops

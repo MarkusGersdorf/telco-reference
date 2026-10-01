@@ -145,28 +145,71 @@
 - name: Configure Vault
   ansible.builtin.include_tasks: configure.yaml
 
-# --- Vault Secrets Operator ---
+# --- External Secrets Operator ---
 
-- name: Render vault-secrets-operator manifests
+- name: Render ESO manifests
   ansible.builtin.template:
-    src: configuration/vault-secrets-operator.yaml.j2
-    dest: "{{ config_stage_dir }}/vault-secrets-operator.yaml"
+    src: "configuration/{{ item.src }}"
+    dest: "{{ config_stage_dir }}/{{ item.dest }}"
     mode: "0644"
+  loop:
+    - src: eso-subscription.yaml.j2
+      dest: eso-subscription.yaml
+    - src: eso-clustersecretstore.yaml.j2
+      dest: eso-clustersecretstore.yaml
+  loop_control:
+    label: "{{ item.dest }}"
 
-- name: Install vault-secrets-operator
+- name: Install External Secrets Operator
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    apply -f {{ config_stage_dir }}/vault-secrets-operator.yaml
+    apply -f {{ config_stage_dir }}/eso-subscription.yaml
 
-- name: Wait for vault-secrets-operator
+- name: Wait for ESO operator
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    -n vault-secrets-operator-system get subscriptions.operators.coreos.com
-    vault-secrets-operator -o jsonpath='{.status.state}'
-  register: vso_state
-  until: vso_state.stdout == "AtLatestKnown"
+    -n external-secrets-operator get subscriptions.operators.coreos.com
+    openshift-external-secrets-operator -o jsonpath='{.status.state}'
+  register: eso_state
+  until: eso_state.stdout == "AtLatestKnown"
   retries: 30
   delay: 20
+  changed_when: false
+
+- name: Wait for ExternalSecret CRD
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    get crd externalsecrets.external-secrets.io
+  register: eso_crd
+  until: eso_crd.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Wait for ClusterSecretStore CRD
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    get crd clustersecretstores.external-secrets.io
+  register: css_crd
+  until: css_crd.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Create ClusterSecretStore for Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/eso-clustersecretstore.yaml
+
+- name: Wait for ClusterSecretStore to be ready
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    get clustersecretstore vault-backend
+    -o jsonpath='{.status.conditions[?(@.type=="Ready")].status}'
+  register: css_ready
+  until: css_ready.stdout == "True"
+  retries: 30
+  delay: 10
   changed_when: false
 
 - name: Vault deployment complete
@@ -174,4 +217,5 @@
     msg:
       - "Vault Enterprise: vault.apps.{{ cluster.name }}.{{ cluster.base_domain }}"
       - "Unseal keys stored in secret vault/vault-unseal-keys"
-      - "Vault Secrets Operator: installed"
+      - "External Secrets Operator: installed"
+      - "ClusterSecretStore: vault-backend"
