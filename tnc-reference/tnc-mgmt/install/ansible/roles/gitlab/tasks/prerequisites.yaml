@@ -5,11 +5,13 @@
   ansible.builtin.command: python3 -m venv /opt/s3-venv
   args:
     creates: /opt/s3-venv/bin/python3
+  become: true
 
 - name: Install boto3 in venv
   ansible.builtin.command: /opt/s3-venv/bin/pip install boto3
   register: boto3_install
   changed_when: "'Successfully installed' in boto3_install.stdout"
+  become: true
 
 # --- NooBaa account and S3 buckets ---
 
