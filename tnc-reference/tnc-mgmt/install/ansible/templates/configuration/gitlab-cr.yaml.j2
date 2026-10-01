@@ -63,9 +63,7 @@ spec:
             enabled: true
             bucket: gitlab-uploads-storage
         gatewayApi:
-          enabled: true
-          gatewayName: {{ configuration.gateway.name }}
-          namespace: {{ configuration.gateway.namespace }}
+          enabled: false
         hosts:
           domain: apps.{{ cluster.name }}.{{ cluster.base_domain }}
           pages:
