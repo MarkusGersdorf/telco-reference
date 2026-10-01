@@ -105,10 +105,3 @@
   no_log: true
   when: vault_redis_check.rc != 0
 
-- name: Write registry storage placeholder to Vault
-  ansible.builtin.shell: |
-    echo '{{ {"config": "s3: {}"} | to_json }}' | \
-    oc --kubeconfig {{ kubeconfig_path }} \
-      -n vault exec -i vault-0 -- \
-      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put secret/gitlab/registry-storage @/dev/stdin'
-  no_log: true
