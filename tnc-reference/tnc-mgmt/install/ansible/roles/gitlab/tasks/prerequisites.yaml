@@ -127,6 +127,27 @@
       sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put secret/gitlab/backup-object-storage @/dev/stdin'
   no_log: true
 
+- name: Set registry storage config
+  ansible.builtin.set_fact:
+    gitlab_registry_config: |-
+      s3:
+        accesskey: {{ noobaa_access_key }}
+        secretkey: {{ noobaa_secret_key }}
+        region: us-east-1
+        bucket: gitlab-registry-storage
+        regionendpoint: {{ noobaa_s3_endpoint }}
+        v4auth: true
+        pathstyle: true
+  no_log: true
+
+- name: Write registry storage config to Vault
+  ansible.builtin.shell: |
+    echo '{{ {"config": gitlab_registry_config} | to_json }}' | \
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n vault exec -i vault-0 -- \
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put secret/gitlab/registry-storage @/dev/stdin'
+  no_log: true
+
 # --- VaultAuth and VaultStaticSecret resources ---
 
 - name: Template Vault auth resources
