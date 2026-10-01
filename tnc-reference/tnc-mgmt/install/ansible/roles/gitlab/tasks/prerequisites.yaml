@@ -49,7 +49,7 @@
 
 - name: Create GitLab S3 buckets
   ansible.builtin.shell: |
-    python3 << 'PYSCRIPT'
+    /opt/s3-venv/bin/python3 << 'PYSCRIPT'
     import boto3, urllib3
     urllib3.disable_warnings()
     s3 = boto3.client('s3',
