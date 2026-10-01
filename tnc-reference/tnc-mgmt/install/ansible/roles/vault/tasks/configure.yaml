@@ -39,29 +39,29 @@
     kubernetes_host=https://kubernetes.default.svc:443'
   no_log: true
 
-- name: Write GitLab read policy
+- name: Write ESO read policy
   ansible.builtin.shell: |
     oc --kubeconfig {{ kubeconfig_path }} \
       -n vault exec -i vault-0 -- \
-      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault policy write gitlab-read -' <<'POLICY'
-    path "secret/data/gitlab/*" {
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault policy write eso-read -' <<'POLICY'
+    path "secret/data/*" {
       capabilities = ["read"]
     }
-    path "secret/metadata/gitlab/*" {
+    path "secret/metadata/*" {
       capabilities = ["read", "list"]
     }
     POLICY
   no_log: true
 
-- name: Create Kubernetes auth role for GitLab secrets
+- name: Create Kubernetes auth role for ESO
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n vault exec vault-0 --
     sh -c 'VAULT_TOKEN={{ vault_root_token }} vault write
-    auth/kubernetes/role/gitlab-secrets-operator
-    bound_service_account_names=default
-    bound_service_account_namespaces=gitlab-system
-    policies=gitlab-read
+    auth/kubernetes/role/{{ configuration.vault.role }}
+    bound_service_account_names=external-secrets
+    bound_service_account_namespaces=external-secrets
+    policies=eso-read
     ttl=1h'
   no_log: true
 
@@ -105,3 +105,12 @@
   no_log: true
   when: vault_redis_check.rc != 0
 
+- name: Write DNS API credentials to Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }}
+    vault kv put secret/certmanager/dns-credentials
+    apiToken={{ configuration.certmanager.dns_provider.username }}
+    apiSecret={{ configuration.certmanager.dns_provider.password }}'
+  no_log: true
