@@ -140,6 +140,11 @@
   loop_control:
     loop_var: replica_index
 
+# --- Configure Vault (KV engine, K8s auth, policies, seed secrets) ---
+
+- name: Configure Vault
+  ansible.builtin.include_tasks: configure.yaml
+
 # --- Vault Secrets Operator ---
 
 - name: Render vault-secrets-operator manifests

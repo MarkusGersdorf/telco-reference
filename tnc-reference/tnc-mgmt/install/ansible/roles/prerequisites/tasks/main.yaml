@@ -74,6 +74,7 @@
     name:
       - httpd
       - nmstate
+      - python3-boto3
     state: present
     use_backend: dnf4
   become: true

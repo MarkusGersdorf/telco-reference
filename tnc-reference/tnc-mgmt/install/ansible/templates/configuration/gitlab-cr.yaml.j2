@@ -42,6 +42,7 @@ spec:
             connection:
               secret: gitlab-object-storage
               key: connection
+{% if configuration.gitlab.keycloak_enabled | default(false) %}
           omniauth:
             enabled: true
             allowSingleSignOn:
@@ -51,6 +52,7 @@ spec:
             providers:
               - key: provider
                 secret: gitlab-keycloak
+{% endif %}
           packages:
             enabled: true
             bucket: gitlab-packages-storage
@@ -99,13 +101,13 @@ spec:
             key: {{ configuration.gitlab.redis.secret_key }}
         registry:
           enabled: {{ configuration.gitlab.registry_enabled | lower }}
-          storage:
-            secret: gitlab-object-storage
-            key: connection
-          bucket: gitlab-registry-storage
         replicaCount: {{ configuration.gitlab.replicas }}
       metrics:
         enabled: false
+      registry:
+        storage:
+          secret: gitlab-registry-storage
+          key: config
       nginx-ingress:
         enabled: false
       postgresql:
