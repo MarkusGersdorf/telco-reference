@@ -7,6 +7,7 @@
   loop:
     - "{{ dns_dir }}"
     - "{{ dns_dir }}/zones"
+  become: true
 
 - name: Generate zone file for this cluster
   ansible.builtin.template:
@@ -14,6 +15,7 @@
     dest: "{{ dns_dir }}/zones/{{ cluster.name }}.{{ cluster.base_domain }}.zone"
     mode: "0644"
   register: zone_updated
+  become: true
 
 - name: Discover all zone files in zones directory
   ansible.builtin.find:
@@ -36,12 +38,14 @@
     dest: "{{ dns_dir }}/named.conf"
     mode: "0644"
   register: named_conf_updated
+  become: true
 
 - name: Ensure DNS files are readable by container (UID 65532)
   ansible.builtin.file:
     path: "{{ dns_dir }}"
     mode: "a+rX"
     recurse: true
+  become: true
 
 - name: Check if DNS container exists
   ansible.builtin.command: podman container exists dns-server
