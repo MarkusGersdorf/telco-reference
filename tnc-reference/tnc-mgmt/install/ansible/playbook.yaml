@@ -6,7 +6,7 @@
   tags: [install]
 
   vars_files:
-    - vars.yaml
+    - "{{ cluster_vars | default('vars.yaml') }}"
 
   vars:
     build_dir: "{{ playbook_dir }}/../build"
@@ -31,7 +31,7 @@
   tags: [configure]
 
   vars_files:
-    - vars.yaml
+    - "{{ cluster_vars | default('vars.yaml') }}"
 
   vars:
     build_dir: "{{ playbook_dir }}/../build"

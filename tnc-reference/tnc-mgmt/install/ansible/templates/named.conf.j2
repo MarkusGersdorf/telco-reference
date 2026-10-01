@@ -22,7 +22,10 @@ options {
 
 controls { };
 
-zone "{{ cluster.name }}.{{ cluster.base_domain }}" IN {
+{% for zone in dns_zones %}
+zone "{{ zone }}" IN {
     type primary;
-    file "/var/named/{{ cluster.name }}.{{ cluster.base_domain }}.zone";
+    file "/var/named/{{ zone }}.zone";
 };
+
+{% endfor %}
