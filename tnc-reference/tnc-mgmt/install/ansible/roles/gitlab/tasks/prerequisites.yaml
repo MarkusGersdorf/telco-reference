@@ -1,0 +1,206 @@
+---
+# --- S3 tooling ---
+
+- name: Create Python venv for S3 tools
+  ansible.builtin.command: python3 -m venv /opt/s3-venv
+  args:
+    creates: /opt/s3-venv/bin/python3
+  become: true
+
+- name: Install boto3 in venv
+  ansible.builtin.command: /opt/s3-venv/bin/pip install boto3
+  register: boto3_install
+  changed_when: "'Successfully installed' in boto3_install.stdout"
+  become: true
+
+# --- NooBaa account and S3 buckets ---
+
+- name: Template NooBaaAccount
+  ansible.builtin.template:
+    src: configuration/gitlab-noobaa-account.yaml.j2
+    dest: "{{ config_stage_dir }}/gitlab-noobaa-account.yaml"
+    mode: "0644"
+
+- name: Create NooBaaAccount for GitLab
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/gitlab-noobaa-account.yaml
+
+- name: Wait for NooBaa account secret
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n openshift-storage get secret noobaa-account-gitlab
+    -o jsonpath='{.data.AWS_ACCESS_KEY_ID}'
+  register: noobaa_secret_check
+  until: noobaa_secret_check.rc == 0 and noobaa_secret_check.stdout | length > 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  no_log: true
+
+- name: Read NooBaa account credentials
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n openshift-storage get secret noobaa-account-gitlab -o json
+  register: noobaa_secret_json
+  no_log: true
+
+- name: Set NooBaa credentials
+  ansible.builtin.set_fact:
+    noobaa_access_key: "{{ (noobaa_secret_json.stdout | from_json).data.AWS_ACCESS_KEY_ID | b64decode }}"
+    noobaa_secret_key: "{{ (noobaa_secret_json.stdout | from_json).data.AWS_SECRET_ACCESS_KEY | b64decode }}"
+  no_log: true
+
+- name: Get NooBaa S3 route
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n openshift-storage get route s3 -o jsonpath='{.spec.host}'
+  register: noobaa_s3_route
+
+- name: Set NooBaa S3 endpoint
+  ansible.builtin.set_fact:
+    noobaa_s3_endpoint: "https://{{ noobaa_s3_route.stdout }}"
+
+- name: Create GitLab S3 buckets
+  ansible.builtin.shell: |
+    /opt/s3-venv/bin/python3 << 'PYSCRIPT'
+    import boto3, urllib3
+    urllib3.disable_warnings()
+    s3 = boto3.client('s3',
+        endpoint_url='{{ noobaa_s3_endpoint }}',
+        aws_access_key_id='{{ noobaa_access_key }}',
+        aws_secret_access_key='{{ noobaa_secret_key }}',
+        verify=False)
+    buckets = [
+        'gitlab-artifacts-storage',
+        'gitlab-lfs-storage',
+        'gitlab-uploads-storage',
+        'gitlab-packages-storage',
+        'gitlab-pages-storage',
+        'gitlab-dependency-proxy',
+        'gitlab-backup-storage',
+        'gitlab-tmp-storage',
+        'gitlab-registry-storage',
+    ]
+    for bucket in buckets:
+        try:
+            s3.create_bucket(Bucket=bucket)
+            print(f'Created {bucket}')
+        except Exception as e:
+            if 'BucketAlreadyOwnedByYou' in str(e) or 'BucketAlreadyExists' in str(e):
+                print(f'Exists {bucket}')
+            else:
+                raise
+    PYSCRIPT
+  no_log: true
+  register: bucket_creation
+  changed_when: "'Created' in bucket_creation.stdout"
+
+# --- Write object storage connection to Vault ---
+
+- name: Set S3 connection YAML
+  ansible.builtin.set_fact:
+    gitlab_s3_connection: |-
+      provider: AWS
+      aws_access_key_id: {{ noobaa_access_key }}
+      aws_secret_access_key: {{ noobaa_secret_key }}
+      aws_signature_version: 4
+      host: {{ noobaa_s3_route.stdout }}
+      endpoint: {{ noobaa_s3_endpoint }}
+      path_style: true
+      region: us-east-1
+  no_log: true
+
+- name: Write object storage connection to Vault
+  ansible.builtin.shell: |
+    echo '{{ {"connection": gitlab_s3_connection} | to_json }}' | \
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n vault exec -i vault-0 -- \
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put {{ configuration.vault.secret_path }}/gitlab/object-storage @/dev/stdin'
+  no_log: true
+
+- name: Write backup object storage connection to Vault
+  ansible.builtin.shell: |
+    echo '{{ {"connection": gitlab_s3_connection} | to_json }}' | \
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n vault exec -i vault-0 -- \
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put {{ configuration.vault.secret_path }}/gitlab/backup-object-storage @/dev/stdin'
+  no_log: true
+
+- name: Set registry storage config
+  ansible.builtin.set_fact:
+    gitlab_registry_config: |-
+      s3:
+        accesskey: {{ noobaa_access_key }}
+        secretkey: {{ noobaa_secret_key }}
+        region: us-east-1
+        bucket: gitlab-registry-storage
+        regionendpoint: {{ noobaa_s3_endpoint }}
+        v4auth: true
+        pathstyle: true
+  no_log: true
+
+- name: Write registry storage config to Vault
+  ansible.builtin.shell: |
+    echo '{{ {"config": gitlab_registry_config} | to_json }}' | \
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n vault exec -i vault-0 -- \
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv put {{ configuration.vault.secret_path }}/gitlab/registry-storage @/dev/stdin'
+  no_log: true
+
+# --- ExternalSecrets (Vault via ESO) ---
+
+- name: Apply GitLab ExternalSecrets
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/gitlab-external-secrets.yaml
+
+- name: Wait for GitLab secrets to sync from Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n gitlab-system get secret {{ item }}
+  register: secret_check
+  until: secret_check.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  loop:
+    - gitlab-object-storage
+    - gitlab-backup-object-storage
+    - gitlab-registry-storage
+    - "{{ configuration.gitlab.psql.secret }}"
+    - "{{ configuration.gitlab.redis.secret }}"
+
+# --- PostgreSQL and Redis ---
+
+- name: Template PostgreSQL deployment
+  ansible.builtin.template:
+    src: configuration/gitlab-postgresql.yaml.j2
+    dest: "{{ config_stage_dir }}/gitlab-postgresql.yaml"
+    mode: "0644"
+
+- name: Template Redis deployment
+  ansible.builtin.template:
+    src: configuration/gitlab-redis.yaml.j2
+    dest: "{{ config_stage_dir }}/gitlab-redis.yaml"
+    mode: "0644"
+
+- name: Deploy PostgreSQL and Redis
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }} apply
+    -f {{ config_stage_dir }}/gitlab-postgresql.yaml
+    -f {{ config_stage_dir }}/gitlab-redis.yaml
+
+- name: Wait for PostgreSQL to be ready
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n gitlab-system wait --for=condition=Available
+    deployment/gitlab-postgres --timeout=300s
+  changed_when: false
+
+- name: Wait for Redis to be ready
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n gitlab-system wait --for=condition=Available
+    deployment/gitlab-redis --timeout=300s
+  changed_when: false

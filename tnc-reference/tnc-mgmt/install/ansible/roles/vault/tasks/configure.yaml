@@ -1,0 +1,116 @@
+---
+- name: Get root token from init output
+  ansible.builtin.set_fact:
+    vault_root_token: "{{ (vault_init_result.stdout | from_json).root_token }}"
+  no_log: true
+  when: vault_init_result is changed
+
+- name: Get root token from existing secret
+  ansible.builtin.set_fact:
+    vault_root_token: "{{ (vault_existing_keys.stdout | b64decode | from_json).root_token }}"
+  no_log: true
+  when: vault_initialized | default(false)
+
+- name: Enable KV v2 secrets engine
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault secrets enable -version=2 -path={{ configuration.vault.secret_path }} kv'
+  register: kv_enable
+  failed_when: kv_enable.rc != 0 and 'path is already in use' not in kv_enable.stderr
+  changed_when: kv_enable.rc == 0
+  no_log: true
+
+- name: Enable Kubernetes auth method
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault auth enable -path={{ configuration.vault.mount_path }} kubernetes'
+  register: k8s_auth_enable
+  failed_when: k8s_auth_enable.rc != 0 and 'already in use' not in k8s_auth_enable.stderr
+  changed_when: k8s_auth_enable.rc == 0
+  no_log: true
+
+- name: Configure Kubernetes auth method
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault write auth/{{ configuration.vault.mount_path }}/config
+    kubernetes_host=https://kubernetes.default.svc:443'
+  no_log: true
+
+- name: Write ESO read policy
+  ansible.builtin.shell: |
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n vault exec -i vault-0 -- \
+      sh -c 'VAULT_TOKEN={{ vault_root_token }} vault policy write eso-read -' <<'POLICY'
+    path "{{ configuration.vault.secret_path }}/data/*" {
+      capabilities = ["read"]
+    }
+    path "{{ configuration.vault.secret_path }}/metadata/*" {
+      capabilities = ["read", "list"]
+    }
+    POLICY
+  no_log: true
+
+- name: Create Kubernetes auth role for ESO
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault write
+    auth/{{ configuration.vault.mount_path }}/role/{{ configuration.vault.role }}
+    bound_service_account_names=external-secrets
+    bound_service_account_namespaces=external-secrets
+    policies=eso-read
+    ttl=1h'
+  no_log: true
+
+- name: Check if PostgreSQL password exists in Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv get -format=json {{ configuration.vault.secret_path }}/gitlab/postgres'
+  register: vault_postgres_check
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: Generate and write PostgreSQL password to Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }}
+    vault kv put {{ configuration.vault.secret_path }}/gitlab/postgres
+    password={{ lookup("ansible.builtin.password", "/dev/null length=24 chars=ascii_letters,digits") }}'
+  no_log: true
+  when: vault_postgres_check.rc != 0
+
+- name: Check if Redis password exists in Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }} vault kv get -format=json {{ configuration.vault.secret_path }}/gitlab/redis'
+  register: vault_redis_check
+  failed_when: false
+  changed_when: false
+  no_log: true
+
+- name: Generate and write Redis password to Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }}
+    vault kv put {{ configuration.vault.secret_path }}/gitlab/redis
+    default={{ lookup("ansible.builtin.password", "/dev/null length=24 chars=ascii_letters,digits") }}'
+  no_log: true
+  when: vault_redis_check.rc != 0
+
+- name: Write DNS API credentials to Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }}
+    vault kv put {{ configuration.vault.secret_path }}/certmanager/dns-credentials
+    apiToken={{ configuration.certmanager.dns_provider.username }}
+    apiSecret={{ configuration.certmanager.dns_provider.password }}'
+  no_log: true

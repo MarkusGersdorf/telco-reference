@@ -1,0 +1,9 @@
+---
+apiVersion: noobaa.io/v1alpha1
+kind: NooBaaAccount
+metadata:
+  name: gitlab
+  namespace: openshift-storage
+spec:
+  allow_bucket_creation: true
+  default_resource: noobaa-default-backing-store

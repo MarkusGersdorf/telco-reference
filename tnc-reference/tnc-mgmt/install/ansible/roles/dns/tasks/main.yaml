@@ -1,12 +1,23 @@
 ---
-- name: Create DNS directories
+- name: Create DNS base directory
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ dns_dir }}"
     state: directory
     mode: "0755"
-  loop:
-    - "{{ dns_dir }}"
-    - "{{ dns_dir }}/zones"
+  become: true
+
+- name: Set DNS directory ownership
+  ansible.builtin.file:
+    path: "{{ dns_dir }}"
+    owner: "{{ lookup('env', 'USER') }}"
+    recurse: true
+  become: true
+
+- name: Create DNS subdirectories
+  ansible.builtin.file:
+    path: "{{ dns_dir }}/zones"
+    state: directory
+    mode: "0755"
 
 - name: Generate zone file for this cluster
   ansible.builtin.template:
@@ -43,22 +54,22 @@
     mode: "a+rX"
     recurse: true
 
-- name: Check if DNS container exists
-  ansible.builtin.command: podman container exists dns-server
-  register: dns_container_exists
+- name: Check if DNS container is running
+  ansible.builtin.command: podman container inspect --format {% raw %}'{{.State.Running}}'{% endraw %} dns-server
+  register: dns_container_state
   changed_when: false
   failed_when: false
   become: true
 
 - name: Set restart flag
   ansible.builtin.set_fact:
-    dns_needs_restart: "{{ dns_container_exists.rc != 0 or zone_updated.changed or named_conf_updated.changed }}"
+    dns_needs_restart: "{{ dns_container_state.stdout != 'true' or zone_updated.changed or named_conf_updated.changed }}"
 
-- name: Remove DNS container when config changed
+- name: Remove DNS container when restart needed
   ansible.builtin.command: podman rm -f dns-server
   become: true
   changed_when: true
-  when: dns_needs_restart | bool and dns_container_exists.rc == 0
+  when: dns_needs_restart | bool and dns_container_state.rc == 0
 
 - name: Open firewall for DNS
   ansible.posix.firewalld:
@@ -73,7 +84,7 @@
     podman run -d --name dns-server
     --publish 53:8053/udp --publish 53:8053/tcp
     -v {{ dns_dir }}/named.conf:/etc/named/hbird-defaults.conf:ro,Z
-    -v {{ dns_dir }}/zones:/var/named:ro,Z
+    -v {{ dns_dir }}/zones:/var/named/zones:ro,Z
     registry.access.redhat.com/hi/bind:latest
   become: true
   when: dns_needs_restart | bool

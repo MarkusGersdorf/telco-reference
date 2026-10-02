@@ -42,6 +42,7 @@ spec:
             connection:
               secret: gitlab-object-storage
               key: connection
+{% if configuration.gitlab.keycloak_enabled | default(false) %}
           omniauth:
             enabled: true
             allowSingleSignOn:
@@ -51,6 +52,7 @@ spec:
             providers:
               - key: provider
                 secret: gitlab-keycloak
+{% endif %}
           packages:
             enabled: true
             bucket: gitlab-packages-storage
@@ -61,9 +63,7 @@ spec:
             enabled: true
             bucket: gitlab-uploads-storage
         gatewayApi:
-          enabled: true
-          gatewayName: {{ configuration.gateway.name }}
-          namespace: {{ configuration.gateway.namespace }}
+          enabled: false
         hosts:
           domain: apps.{{ cluster.name }}.{{ cluster.base_domain }}
           pages:
@@ -71,6 +71,8 @@ spec:
         ingress:
           class: none
           configureCertmanager: false
+          tls:
+            enabled: false
         minio:
           enabled: false
         pages:
@@ -102,6 +104,10 @@ spec:
         replicaCount: {{ configuration.gitlab.replicas }}
       metrics:
         enabled: false
+      registry:
+        storage:
+          secret: gitlab-registry-storage
+          key: config
       nginx-ingress:
         enabled: false
       postgresql:

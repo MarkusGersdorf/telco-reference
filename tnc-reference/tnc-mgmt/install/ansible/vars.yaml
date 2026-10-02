@@ -131,6 +131,21 @@ configuration:
     # advanced-cluster-management: release-2.17
     # cluster-logging: stable-6.6
 
+  # cert-manager — wildcard TLS via Let's Encrypt DNS-01 challenge.
+  # The webhook solver image and solver/group names are provider-specific;
+  # set them to match whatever DNS webhook you deploy.
+  certmanager:
+    email: REDACTED
+    dns_provider:
+      api_url: https://REDACTED/v0
+      username: REDACTED
+      password: REDACTED
+    webhook:
+      image: REDACTED
+      image_tag: latest
+      group_name: REDACTED
+      solver_name: REDACTED
+
   # GitLab instance deployed on this cluster (before ArgoCD, needs ODF)
   # Chart version must match the gitlab-operator version — check with:
   #   oc -n gitlab-system get csv -o jsonpath='{.items[0].spec.version}'
@@ -141,6 +156,12 @@ configuration:
     replicas: 3
     pages_subdomain: docs
     registry_enabled: false
+    keycloak_enabled: false
+    postgres:
+      image: registry.redhat.io/rhel9/postgresql-18
+      image_tag: "latest"
+      storage_size: "10Gi"
+      storage_class: ocs-storagecluster-ceph-rbd
     psql:
       host: gitlab-postgres-rw
       port: 5432
@@ -148,6 +169,9 @@ configuration:
       username: gitlab
       secret: gitlab-postgres-app-secret
       secret_key: password
+    redis_deployment:
+      image: registry.redhat.io/rhel9/redis-7
+      image_tag: "latest"
     redis:
       host: gitlab-redis
       secret: gitlab-redis-secret-custom
