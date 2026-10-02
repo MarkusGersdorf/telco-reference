@@ -3,14 +3,19 @@
 #
 #   ansible-playbook get-macs.yaml
 #   ansible-playbook get-macs.yaml -e cluster_vars=vars-hub01.yaml
+#
+# Writes a YAML report to ../build/mac-report.yaml
 
 - name: Get MAC addresses from Supermicro BMCs
   hosts: localhost
   connection: local
-  gather_facts: false
+  gather_facts: true
 
   vars_files:
     - "{{ cluster_vars | default('vars.yaml') }}"
+
+  vars:
+    build_dir: "{{ playbook_dir }}/../build"
 
   tasks:
     - name: Query EthernetInterfaces collection from each BMC
@@ -53,17 +58,41 @@
       loop_control:
         label: "{{ item.hostname }} {{ item.path | basename }}"
 
-    - name: Display MAC addresses per host
-      ansible.builtin.debug:
-        msg: "{{ _summary }}"
-      vars:
-        _summary: >-
-          {% set ns = namespace(current='') %}
-          {% for r in nic_details.results %}
-          {% if r.item.hostname != ns.current %}
-          {% set ns.current = r.item.hostname %}
+    - name: Create build directory
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: directory
+        mode: "0755"
 
-          {{ r.item.hostname }} (BMC {{ r.item.bmc_address }}):
+    - name: Write MAC report
+      ansible.builtin.copy:
+        dest: "{{ build_dir }}/mac-report.yaml"
+        mode: "0644"
+        content: |
+          # MAC addresses retrieved from BMCs via Redfish
+          # Cluster: {{ cluster.name }}.{{ cluster.base_domain }}
+          # Generated: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
+          #
+          # Format:
+          #   <hostname> (BMC <address>):
+          #     <bmc_nic_name>:
+          #       mac: <address>
+          #       description: <hardware description>
+
+          {% for host in hosts %}
+          {{ host.hostname }} (BMC {{ host.bmc_address }}):
+          {% for r in nic_details.results %}
+          {% if r.item.hostname == host.hostname %}
+            {{ r.json.Name | default(r.json.Id) }}:
+              mac: "{{ r.json.MACAddress | default('N/A') }}"
+          {% if r.json.Description is defined and r.json.Description %}
+              description: "{{ r.json.Description }}"
           {% endif %}
-            {{ '%-20s' | format(r.json.Name | default(r.json.Id)) }}  {{ r.json.MACAddress | default('N/A') }}  {{ r.json.Description | default('') }}
+          {% endif %}
           {% endfor %}
+
+          {% endfor %}
+
+    - name: Show report path
+      ansible.builtin.debug:
+        msg: "MAC report written to {{ build_dir }}/mac-report.yaml"
