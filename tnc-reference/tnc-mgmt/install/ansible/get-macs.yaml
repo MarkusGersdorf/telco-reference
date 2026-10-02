@@ -28,22 +28,17 @@
 
     - name: Build flat list of NIC queries
       ansible.builtin.set_fact:
-        nic_queries: "{{ _queries }}"
+        nic_queries: "{{ (nic_queries | default([])) + [_entry] }}"
       vars:
-        _queries: >-
-          {% set result = [] %}
-          {% for col in nic_collections.results %}
-          {% for member in col.json.Members %}
-          {% set _ = result.append({
-               'hostname': col.item.hostname,
-               'bmc_address': col.item.bmc_address,
-               'bmc_username': col.item.bmc_username,
-               'bmc_password': col.item.bmc_password,
-               'path': member['@odata.id']
-             }) %}
-          {% endfor %}
-          {% endfor %}
-          {{ result }}
+        _entry:
+          hostname: "{{ item.0.item.hostname }}"
+          bmc_address: "{{ item.0.item.bmc_address }}"
+          bmc_username: "{{ item.0.item.bmc_username }}"
+          bmc_password: "{{ item.0.item.bmc_password }}"
+          path: "{{ item.1['@odata.id'] }}"
+      loop: "{{ nic_collections.results | subelements('json.Members') }}"
+      loop_control:
+        label: "{{ item.0.item.hostname }} {{ item.1['@odata.id'] | basename }}"
 
     - name: Query each NIC for MAC address
       ansible.builtin.uri:
