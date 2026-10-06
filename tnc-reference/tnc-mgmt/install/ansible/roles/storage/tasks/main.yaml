@@ -142,6 +142,10 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     apply -k {{ config_stage_dir }}/overlays/odf/
+  register: odf_overlay_result
+  failed_when: >-
+    odf_overlay_result.rc != 0 and
+    'provisioner: Required value' not in odf_overlay_result.stderr
   when: "'odf' in configuration.components"
 
 - name: Wait for StorageCluster to be ready
@@ -155,3 +159,11 @@
   delay: 30
   changed_when: false
   when: "'odf' in configuration.components"
+
+- name: Set default StorageClass annotation
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -k {{ config_stage_dir }}/overlays/odf/
+  when:
+    - "'odf' in configuration.components"
+    - odf_overlay_result.rc != 0
