@@ -155,6 +155,8 @@
   loop:
     - src: eso-subscription.yaml.j2
       dest: eso-subscription.yaml
+    - src: eso-config.yaml.j2
+      dest: eso-config.yaml
     - src: eso-clustersecretstore.yaml.j2
       dest: eso-clustersecretstore.yaml
   loop_control:
@@ -175,6 +177,21 @@
   retries: 30
   delay: 20
   changed_when: false
+
+- name: Wait for ExternalSecretsConfig CRD
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    get crd externalsecretsconfigs.operator.openshift.io
+  register: esc_crd
+  until: esc_crd.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Create ExternalSecretsConfig
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/eso-config.yaml
 
 - name: Wait for ExternalSecret CRD
   ansible.builtin.command: >
