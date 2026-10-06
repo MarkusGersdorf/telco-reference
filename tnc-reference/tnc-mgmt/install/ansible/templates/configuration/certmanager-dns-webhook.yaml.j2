@@ -153,12 +153,13 @@ spec:
           args:
             - --tls-cert-file=/tls/tls.crt
             - --tls-private-key-file=/tls/tls.key
+            - --port=8443
           env:
             - name: GROUP_NAME
               value: {{ configuration.certmanager.webhook.group_name }}
           ports:
             - name: https
-              containerPort: 443
+              containerPort: 8443
               protocol: TCP
           livenessProbe:
             httpGet:
