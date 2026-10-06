@@ -1,0 +1,98 @@
+---
+# Retrieve MAC addresses from Supermicro BMCs via Redfish.
+#
+#   ansible-playbook get-macs.yaml
+#   ansible-playbook get-macs.yaml -e cluster_vars=vars-hub01.yaml
+#
+# Writes a YAML report to ../build/mac-report.yaml
+
+- name: Get MAC addresses from Supermicro BMCs
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars_files:
+    - "{{ cluster_vars | default('vars.yaml') }}"
+
+  vars:
+    build_dir: "{{ playbook_dir }}/../build"
+
+  tasks:
+    - name: Query EthernetInterfaces collection from each BMC
+      ansible.builtin.uri:
+        url: "https://{{ item.bmc_address }}/redfish/v1/Systems/1/EthernetInterfaces"
+        method: GET
+        user: "{{ item.bmc_username }}"
+        password: "{{ item.bmc_password }}"
+        force_basic_auth: true
+        validate_certs: false
+      register: nic_collections
+      loop: "{{ hosts }}"
+      loop_control:
+        label: "{{ item.hostname }}"
+
+    - name: Build flat list of NIC queries
+      ansible.builtin.set_fact:
+        nic_queries: "{{ (nic_queries | default([])) + [_entry] }}"
+      vars:
+        _entry:
+          hostname: "{{ item.0.item.hostname }}"
+          bmc_address: "{{ item.0.item.bmc_address }}"
+          bmc_username: "{{ item.0.item.bmc_username }}"
+          bmc_password: "{{ item.0.item.bmc_password }}"
+          path: "{{ item.1['@odata.id'] }}"
+      loop: "{{ nic_collections.results | subelements('json.Members') }}"
+      loop_control:
+        label: "{{ item.0.item.hostname }} {{ item.1['@odata.id'] | basename }}"
+
+    - name: Query each NIC for MAC address
+      ansible.builtin.uri:
+        url: "https://{{ item.bmc_address }}{{ item.path }}"
+        method: GET
+        user: "{{ item.bmc_username }}"
+        password: "{{ item.bmc_password }}"
+        force_basic_auth: true
+        validate_certs: false
+      register: nic_details
+      loop: "{{ nic_queries }}"
+      loop_control:
+        label: "{{ item.hostname }} {{ item.path | basename }}"
+
+    - name: Create build directory
+      ansible.builtin.file:
+        path: "{{ build_dir }}"
+        state: directory
+        mode: "0755"
+
+    - name: Write MAC report
+      ansible.builtin.copy:
+        dest: "{{ build_dir }}/mac-report.yaml"
+        mode: "0644"
+        content: |
+          # MAC addresses retrieved from BMCs via Redfish
+          # Cluster: {{ cluster.name }}.{{ cluster.base_domain }}
+          # Generated: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
+          #
+          # Format:
+          #   <hostname> (BMC <address>):
+          #     <bmc_nic_name>:
+          #       mac: <address>
+          #       description: <hardware description>
+
+          {% for host in hosts %}
+          {{ host.hostname }} (BMC {{ host.bmc_address }}):
+          {% for r in nic_details.results %}
+          {% if r.item.hostname == host.hostname %}
+            {{ r.json.Name | default(r.json.Id) }}:
+              mac: "{{ r.json.MACAddress | default('N/A') }}"
+          {% if r.json.Description is defined and r.json.Description %}
+              description: "{{ r.json.Description }}"
+          {% endif %}
+          {% endif %}
+          {% endfor %}
+
+          {% endfor %}
+
+    - name: Show report path
+      ansible.builtin.debug:
+        msg: "MAC report written to {{ build_dir }}/mac-report.yaml"
