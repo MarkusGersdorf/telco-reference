@@ -25,15 +25,3 @@ spec:
   source: {{ configuration.catalog_source }}
   sourceNamespace: openshift-marketplace
   installPlanApproval: Automatic
----
-apiVersion: operator.openshift.io/v1alpha1
-kind: ExternalSecretsConfig
-metadata:
-  name: cluster
-spec:
-  controllerConfig:
-    networkPolicies:
-      - componentName: ExternalSecretsCoreController
-        egress:
-          - {}
-        name: allow-external-secrets-egress
