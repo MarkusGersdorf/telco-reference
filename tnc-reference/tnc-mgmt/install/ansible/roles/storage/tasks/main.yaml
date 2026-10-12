@@ -428,3 +428,45 @@
   delay: 20
   changed_when: false
   when: "'devspaces' in configuration.components"
+
+# --- NooBaa S3 account (shared by keycloak, netbox, aap, gitlab) ---
+
+- name: Create Python venv for S3 tools
+  ansible.builtin.command: python3 -m venv /opt/s3-venv
+  args:
+    creates: /opt/s3-venv/bin/python3
+  become: true
+  when: "'odf' in configuration.components"
+
+- name: Install boto3 in venv
+  ansible.builtin.command: /opt/s3-venv/bin/pip install boto3
+  register: boto3_install
+  changed_when: "'Successfully installed' in boto3_install.stdout"
+  become: true
+  when: "'odf' in configuration.components"
+
+- name: Template NooBaaAccount
+  ansible.builtin.template:
+    src: configuration/gitlab-noobaa-account.yaml.j2
+    dest: "{{ config_stage_dir }}/gitlab-noobaa-account.yaml"
+    mode: "0644"
+  when: "'odf' in configuration.components"
+
+- name: Create NooBaaAccount
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/gitlab-noobaa-account.yaml
+  when: "'odf' in configuration.components"
+
+- name: Wait for NooBaa account secret
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n openshift-storage get secret noobaa-account-gitlab
+    -o jsonpath='{.data.AWS_ACCESS_KEY_ID}'
+  register: noobaa_secret_check
+  until: noobaa_secret_check.rc == 0 and noobaa_secret_check.stdout | length > 0
+  retries: 30
+  delay: 10
+  changed_when: false
+  no_log: true
+  when: "'odf' in configuration.components"
