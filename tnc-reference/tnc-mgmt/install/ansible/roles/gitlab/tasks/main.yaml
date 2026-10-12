@@ -64,7 +64,8 @@
     -n gitlab-system get csv -o json |
     python3 -c "import json,sys; csvs=json.load(sys.stdin)['items'];
     gl=[c for c in csvs if 'gitlab' in c['metadata']['name'].lower()];
-    print(gl[0]['spec']['version'] if gl else '')"
+    examples=json.loads(gl[0]['metadata']['annotations']['alm-examples']);
+    print(examples[0]['spec']['chart']['version'])"
   register: gitlab_csv_version
   changed_when: false
 
