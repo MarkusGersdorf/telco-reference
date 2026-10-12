@@ -165,7 +165,7 @@
   ansible.builtin.shell: >
     oc --kubeconfig {{ kubeconfig_path }} --insecure-skip-tls-verify
     get kubeapiserver cluster
-    -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}'
+    -o jsonpath='{.status.conditions[?(@.type=="NodeInstallerProgressing")].status}'
   register: api_rollout
   until: api_rollout.stdout == "False"
   retries: 30
