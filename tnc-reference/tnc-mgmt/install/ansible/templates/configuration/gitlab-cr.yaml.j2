@@ -6,7 +6,7 @@ metadata:
   namespace: gitlab-system
 spec:
   chart:
-    version: "{{ configuration.gitlab.chart_version }}"
+    version: "{{ gitlab_chart_version | default(configuration.gitlab.chart_version) }}"
     values:
       certmanager:
         install: false
