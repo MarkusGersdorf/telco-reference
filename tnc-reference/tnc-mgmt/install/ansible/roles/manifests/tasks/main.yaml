@@ -97,6 +97,13 @@
     dest: "{{ build_dir }}/openshift/etcd-encryption.yaml"
     mode: "0640"
 
+- name: Enable IP forwarding on DNS VLAN interface
+  ansible.builtin.template:
+    src: dns-vlan-forwarding.yaml.j2
+    dest: "{{ build_dir }}/openshift/99-dns-vlan-forwarding.yaml"
+    mode: "0640"
+  when: networking.dns_network is defined
+
 - name: Copy disconnected install manifests
   ansible.builtin.copy:
     src: "{{ extra_manifests_dir }}/"
