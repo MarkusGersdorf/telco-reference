@@ -4,6 +4,9 @@ kind: MetalLB
 metadata:
   name: metallb
   namespace: metallb-system
+spec:
+  speakerNodeSelector:
+    node-role.kubernetes.io/worker: ""
 ---
 apiVersion: metallb.io/v1beta1
 kind: IPAddressPool
