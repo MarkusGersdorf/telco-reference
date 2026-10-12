@@ -470,3 +470,48 @@
   changed_when: false
   no_log: true
   when: "'odf' in configuration.components"
+
+# --- EDB CNPG Operator ---
+
+- name: Render CNPG operator manifest
+  ansible.builtin.template:
+    src: configuration/cnpg-operator.yaml.j2
+    dest: "{{ config_stage_dir }}/cnpg-operator.yaml"
+    mode: "0644"
+
+- name: Install EDB CNPG operator
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    apply -f {{ config_stage_dir }}/cnpg-operator.yaml
+
+- name: Wait for CNPG operator
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n postgresql-operator-system get subscriptions.operators.coreos.com
+    cloud-native-postgresql -o jsonpath='{.status.state}'
+  register: cnpg_state
+  until: cnpg_state.stdout == "AtLatestKnown"
+  retries: 30
+  delay: 20
+  changed_when: false
+
+- name: Wait for CNPG Cluster CRD
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    get crd clusters.postgresql.k8s.enterprisedb.io
+  register: cnpg_crd
+  until: cnpg_crd.rc == 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
+- name: Wait for CNPG webhook to be ready
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n postgresql-operator-system wait --for=condition=Available
+    deployment/postgresql-operator-controller-manager --timeout=300s
+  register: cnpg_webhook
+  until: cnpg_webhook.rc == 0
+  retries: 10
+  delay: 15
+  changed_when: false

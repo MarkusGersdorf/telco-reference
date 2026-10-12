@@ -15,8 +15,6 @@
       dest: gitlab-routes.yaml
     - src: gitlab-external-secrets.yaml.j2
       dest: gitlab-external-secrets.yaml
-    - src: cnpg-operator.yaml.j2
-      dest: cnpg-operator.yaml
   loop_control:
     label: "{{ item.dest }}"
 
