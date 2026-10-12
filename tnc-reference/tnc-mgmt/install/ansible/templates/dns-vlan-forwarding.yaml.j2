@@ -15,5 +15,4 @@ spec:
           mode: 0644
           overwrite: true
           contents:
-            inline: |
-              net.ipv4.conf.bond0/{{ networking.dns_network.vlan_id }}.forwarding = 1
+            source: "data:text/plain,net.ipv4.conf.bond0%2F{{ networking.dns_network.vlan_id }}.forwarding%20%3D%201%0A"
