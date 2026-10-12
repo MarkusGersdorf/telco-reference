@@ -59,10 +59,12 @@
   changed_when: false
 
 - name: Detect GitLab operator chart version
-  ansible.builtin.command: >
+  ansible.builtin.shell: >
     oc --kubeconfig {{ kubeconfig_path }}
-    -n gitlab-system get csv -l app.kubernetes.io/name=gitlab-operator
-    -o jsonpath='{.items[0].spec.version}'
+    -n gitlab-system get csv -o json |
+    python3 -c "import json,sys; csvs=json.load(sys.stdin)['items'];
+    gl=[c for c in csvs if 'gitlab' in c['metadata']['name'].lower()];
+    print(gl[0]['spec']['version'] if gl else '')"
   register: gitlab_csv_version
   changed_when: false
 
