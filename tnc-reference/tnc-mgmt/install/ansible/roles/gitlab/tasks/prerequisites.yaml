@@ -1,4 +1,45 @@
 ---
+# --- Keycloak OIDC provider secret ---
+
+- name: Read GitLab OIDC client secret from Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }}
+    vault kv get -field=secret {{ configuration.vault.secret_path }}/keycloak/clients/gitlab'
+  register: vault_gitlab_oidc_secret
+  no_log: true
+  when: configuration.gitlab.keycloak_enabled | default(false)
+
+- name: Create GitLab Keycloak OIDC provider secret
+  ansible.builtin.shell: |
+    oc --kubeconfig {{ kubeconfig_path }} \
+      -n gitlab-system create secret generic gitlab-keycloak \
+      --from-literal=provider='{{ gitlab_oidc_provider | to_json }}' \
+      --dry-run=client -o yaml | \
+    oc --kubeconfig {{ kubeconfig_path }} apply -f -
+  vars:
+    gitlab_oidc_provider:
+      name: openid_connect
+      label: Keycloak
+      args:
+        name: openid_connect
+        scope:
+          - openid
+          - profile
+          - email
+        response_type: code
+        issuer: "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}"
+        discovery: true
+        client_auth_method: query
+        uid_field: preferred_username
+        client_options:
+          identifier: gitlab
+          secret: "{{ vault_gitlab_oidc_secret.stdout }}"
+          redirect_uri: "https://gitlab.apps.{{ cluster.name }}.{{ cluster.base_domain }}/users/auth/openid_connect/callback"
+  no_log: true
+  when: configuration.gitlab.keycloak_enabled | default(false)
+
 # --- NooBaa credentials and S3 buckets ---
 
 - name: Read NooBaa account credentials

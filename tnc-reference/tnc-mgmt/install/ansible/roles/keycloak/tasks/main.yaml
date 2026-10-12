@@ -197,36 +197,6 @@
   delay: 10
   changed_when: false
 
-# --- GitLab OIDC provider secret ---
-
-- name: Create GitLab Keycloak OIDC provider secret
-  ansible.builtin.shell: |
-    oc --kubeconfig {{ kubeconfig_path }} \
-      -n gitlab-system create secret generic gitlab-keycloak \
-      --from-literal=provider='{{ gitlab_oidc_provider | to_json }}' \
-      --dry-run=client -o yaml | \
-    oc --kubeconfig {{ kubeconfig_path }} apply -f -
-  vars:
-    gitlab_oidc_provider:
-      name: openid_connect
-      label: Keycloak
-      args:
-        name: openid_connect
-        scope:
-          - openid
-          - profile
-          - email
-        response_type: code
-        issuer: "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}"
-        discovery: true
-        client_auth_method: query
-        uid_field: preferred_username
-        client_options:
-          identifier: gitlab
-          secret: "{{ vault_gitlab_secret.stdout }}"
-          redirect_uri: "https://gitlab.apps.{{ cluster.name }}.{{ cluster.base_domain }}/users/auth/openid_connect/callback"
-  no_log: true
-
 # --- OpenShift OAuth ---
 
 - name: Configure OpenShift OAuth with Keycloak
