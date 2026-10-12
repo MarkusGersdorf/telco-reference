@@ -1,0 +1,19 @@
+---
+apiVersion: machineconfiguration.openshift.io/v1
+kind: MachineConfig
+metadata:
+  labels:
+    machineconfiguration.openshift.io/role: worker
+  name: 99-dns-vlan-forwarding
+spec:
+  config:
+    ignition:
+      version: {{ ignition_spec_version }}
+    storage:
+      files:
+        - path: /etc/sysctl.d/99-dns-vlan-forwarding.conf
+          mode: 0644
+          overwrite: true
+          contents:
+            inline: |
+              net.ipv4.conf.bond0/{{ networking.dns_network.vlan_id }}.forwarding = 1
