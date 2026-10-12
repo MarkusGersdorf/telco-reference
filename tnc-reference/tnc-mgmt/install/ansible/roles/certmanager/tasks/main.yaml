@@ -161,6 +161,17 @@
         yaml.dump(kc, f, default_flow_style=False)
     "
 
+- name: Wait for API server rollout to complete
+  ansible.builtin.shell: >
+    oc --kubeconfig {{ kubeconfig_path }} --insecure-skip-tls-verify
+    get kubeapiserver cluster
+    -o jsonpath='{.status.conditions[?(@.type=="Progressing")].status}'
+  register: api_rollout
+  until: api_rollout.stdout == "False"
+  retries: 30
+  delay: 30
+  changed_when: false
+
 - name: Verify API access with updated kubeconfig
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }} get nodes
