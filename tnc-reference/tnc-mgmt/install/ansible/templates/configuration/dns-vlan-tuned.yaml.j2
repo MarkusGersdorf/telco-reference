@@ -1,0 +1,19 @@
+---
+apiVersion: tuned.openshift.io/v1
+kind: Tuned
+metadata:
+  name: dns-vlan-forwarding
+  namespace: openshift-cluster-node-tuning-operator
+spec:
+  profile:
+    - name: dns-vlan-forwarding
+      data: |
+        [main]
+        summary=Enable IP forwarding on DNS VLAN interface
+        [sysctl]
+        net.ipv4.conf.bond0/{{ networking.dns_network.vlan_id }}.forwarding = 1
+  recommend:
+    - profile: dns-vlan-forwarding
+      match:
+        - label: node-role.kubernetes.io/worker
+      priority: 20
