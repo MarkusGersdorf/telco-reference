@@ -157,14 +157,23 @@
 
 # --- Deploy NetBox via Helm ---
 
+- name: Check if NetBox is already deployed
+  ansible.builtin.command: >
+    helm status netbox --namespace netbox --kubeconfig {{ kubeconfig_path }}
+  register: netbox_helm_status
+  failed_when: false
+  changed_when: false
+
 - name: Add NetBox Helm repository
   ansible.builtin.command: helm repo add netbox https://charts.netbox.oss.netboxlabs.com
   register: helm_repo
   changed_when: "'has been added' in helm_repo.stdout"
   failed_when: helm_repo.rc != 0 and 'already exists' not in helm_repo.stderr
+  when: netbox_helm_status.rc != 0
 
 - name: Update Helm repositories
   ansible.builtin.command: helm repo update netbox
+  when: netbox_helm_status.rc != 0
 
 - name: Deploy NetBox via Helm
   ansible.builtin.command: >
@@ -175,6 +184,7 @@
     --values {{ config_stage_dir }}/netbox-helm-values.yaml
     --timeout 10m
     --wait
+  when: netbox_helm_status.rc != 0
 
 - name: NetBox ready
   ansible.builtin.debug:
