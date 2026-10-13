@@ -6,14 +6,19 @@ metadata:
   namespace: openshift-cluster-node-tuning-operator
 spec:
   profile:
-    - name: dns-vlan-forwarding
+    - name: dns-vlan-networking
       data: |
         [main]
-        summary=Enable IP forwarding on DNS VLAN interface
+        summary=Network tuning for DNS VLAN and MetalLB on secondary interfaces
         [sysctl]
         net.ipv4.conf.bond0/{{ networking.dns_network.vlan_id }}.forwarding = 1
+{% if networking.vlan_id is defined %}
+        net.ipv4.conf.bond0/{{ networking.vlan_id }}.rp_filter = 2
+{% else %}
+        net.ipv4.conf.bond0.rp_filter = 2
+{% endif %}
   recommend:
-    - profile: dns-vlan-forwarding
+    - profile: dns-vlan-networking
       match:
         - label: node-role.kubernetes.io/worker
       priority: 20
