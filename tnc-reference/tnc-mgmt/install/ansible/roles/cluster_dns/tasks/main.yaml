@@ -20,22 +20,26 @@
     fail_msg: "No zone files found in /opt/dns/zones/ — bastion DNS role must run first"
     success_msg: "Discovered zones: {{ dns_zones | join(', ') }}"
 
+# --- SCC and networking ---
+
 - name: Grant anyuid SCC to dns-server service account
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     adm policy add-scc-to-user anyuid
     system:serviceaccount:dns:dns-server
 
-- name: Render DNS VLAN forwarding Tuned profile
+- name: Render DNS VLAN NetworkAttachmentDefinition
   ansible.builtin.template:
-    src: configuration/dns-vlan-tuned.yaml.j2
-    dest: "{{ config_stage_dir }}/dns-vlan-tuned.yaml"
+    src: configuration/dns-net-attach.yaml.j2
+    dest: "{{ config_stage_dir }}/dns-net-attach.yaml"
     mode: "0644"
 
-- name: Apply DNS VLAN forwarding Tuned profile
+- name: Apply DNS VLAN NetworkAttachmentDefinition
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    apply -f {{ config_stage_dir }}/dns-vlan-tuned.yaml
+    apply -f {{ config_stage_dir }}/dns-net-attach.yaml
+
+# --- Deploy DNS ---
 
 - name: Render cluster DNS manifest
   ansible.builtin.template:
@@ -55,17 +59,6 @@
     deployment/dns-server --timeout=300s
   changed_when: false
 
-- name: Wait for DNS LoadBalancer IP assignment
-  ansible.builtin.command: >
-    oc --kubeconfig {{ kubeconfig_path }}
-    -n dns get service dns-udp
-    -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-  register: dns_lb_ip
-  until: dns_lb_ip.stdout | length > 0
-  retries: 30
-  delay: 10
-  changed_when: false
-
 - name: Verify cluster DNS resolves api record
   ansible.builtin.command: >
     dig +short api.{{ cluster.name }}.{{ cluster.base_domain }}
@@ -73,6 +66,9 @@
   register: cluster_dns_check
   changed_when: false
   failed_when: networking.api_vip not in cluster_dns_check.stdout
+  retries: 10
+  delay: 15
+  until: cluster_dns_check.rc == 0
 
 - name: Configure cluster DNS operator to use in-cluster BIND
   ansible.builtin.command: >
@@ -91,5 +87,4 @@
     msg:
       - "Cluster DNS: {{ networking.dns_network.vip }}"
       - "Zones: {{ dns_zones | join(', ') }}"
-      - "Upstream forwarder: configured"
-      - "Bastion DNS can now be decommissioned"
+      - "Architecture: Multus macvlan + keepalived VIP"

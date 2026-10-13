@@ -4,28 +4,3 @@ kind: MetalLB
 metadata:
   name: metallb
   namespace: metallb-system
-spec:
-  speakerNodeSelector:
-    node-role.kubernetes.io/worker: ""
----
-apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
-metadata:
-  name: dns-pool
-  namespace: metallb-system
-spec:
-  autoAssign: false
-  addresses:
-    - {{ networking.dns_network.vip }}/32
----
-apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
-metadata:
-  name: dns-l2
-  namespace: metallb-system
-spec:
-  ipAddressPools:
-    - dns-pool
-  nodeSelectors:
-    - matchLabels:
-        node-role.kubernetes.io/worker: ""
