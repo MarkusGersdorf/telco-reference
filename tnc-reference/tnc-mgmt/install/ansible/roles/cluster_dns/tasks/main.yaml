@@ -20,30 +20,6 @@
     fail_msg: "No zone files found in /opt/dns/zones/ — bastion DNS role must run first"
     success_msg: "Discovered zones: {{ dns_zones | join(', ') }}"
 
-# --- SCC and networking ---
-
-- name: Render DNS server SCC
-  ansible.builtin.template:
-    src: configuration/dns-scc.yaml.j2
-    dest: "{{ config_stage_dir }}/dns-scc.yaml"
-    mode: "0644"
-
-- name: Apply DNS server SCC
-  ansible.builtin.command: >
-    oc --kubeconfig {{ kubeconfig_path }}
-    apply -f {{ config_stage_dir }}/dns-scc.yaml
-
-- name: Render DNS VLAN NetworkAttachmentDefinition
-  ansible.builtin.template:
-    src: configuration/dns-net-attach.yaml.j2
-    dest: "{{ config_stage_dir }}/dns-net-attach.yaml"
-    mode: "0644"
-
-- name: Apply DNS VLAN NetworkAttachmentDefinition
-  ansible.builtin.command: >
-    oc --kubeconfig {{ kubeconfig_path }}
-    apply -f {{ config_stage_dir }}/dns-net-attach.yaml
-
 # --- Deploy DNS ---
 
 - name: Render cluster DNS manifest
@@ -64,10 +40,21 @@
     deployment/dns-server --timeout=300s
   changed_when: false
 
+- name: Wait for DNS LoadBalancer IP assignment
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n dns get service dns-udp
+    -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+  register: dns_lb_ip
+  until: dns_lb_ip.stdout | length > 0
+  retries: 30
+  delay: 10
+  changed_when: false
+
 - name: Verify cluster DNS resolves api record
   ansible.builtin.command: >
     dig +short api.{{ cluster.name }}.{{ cluster.base_domain }}
-    @{{ networking.dns_network.vip }}
+    @{{ networking.dns_vip }}
   register: cluster_dns_check
   changed_when: false
   failed_when: networking.api_vip not in cluster_dns_check.stdout
@@ -79,7 +66,7 @@
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     patch dns.operator.openshift.io default --type merge
-    -p '{"spec":{"upstreamResolvers":{"upstreams":[{"type":"Network","address":"{{ networking.dns_network.vip }}","port":53}]}}}'
+    -p '{"spec":{"upstreamResolvers":{"upstreams":[{"type":"Network","address":"{{ networking.dns_vip }}","port":53}]}}}'
 
 - name: Wait for DNS operator rollout
   ansible.builtin.command: >
@@ -90,6 +77,5 @@
 - name: Cluster DNS ready
   ansible.builtin.debug:
     msg:
-      - "Cluster DNS: {{ networking.dns_network.vip }}"
+      - "Cluster DNS: {{ networking.dns_vip }}"
       - "Zones: {{ dns_zones | join(', ') }}"
-      - "Architecture: Multus macvlan + keepalived VIP"

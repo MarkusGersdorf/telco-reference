@@ -4,3 +4,22 @@ kind: MetalLB
 metadata:
   name: metallb
   namespace: metallb-system
+---
+apiVersion: metallb.io/v1beta1
+kind: IPAddressPool
+metadata:
+  name: dns-pool
+  namespace: metallb-system
+spec:
+  autoAssign: false
+  addresses:
+    - {{ networking.dns_vip }}/32
+---
+apiVersion: metallb.io/v1beta1
+kind: L2Advertisement
+metadata:
+  name: dns-l2
+  namespace: metallb-system
+spec:
+  ipAddressPools:
+    - dns-pool

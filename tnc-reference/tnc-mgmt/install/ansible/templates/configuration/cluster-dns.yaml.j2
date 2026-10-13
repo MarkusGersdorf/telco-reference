@@ -5,12 +5,6 @@ metadata:
   name: dns
 ---
 apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: dns-server
-  namespace: dns
----
-apiVersion: v1
 kind: ConfigMap
 metadata:
   name: dns-named-conf
@@ -22,8 +16,8 @@ data:
         pid-file none;
         session-keyfile none;
 
-        listen-on port 53 { any; };
-        listen-on-v6 port 53 { none; };
+        listen-on port 8053 { any; };
+        listen-on-v6 port 8053 { none; };
 
         recursion yes;
         allow-recursion { any; };
@@ -65,7 +59,7 @@ data:
                 86400       ; minimum TTL
             )
     @       IN  NS  ns1
-    ns1     IN  A   {{ networking.dns_network.vip }}
+    ns1     IN  A   {{ networking.dns_vip }}
 {% if zone == cluster.name + '.' + cluster.base_domain %}
     api     IN  A   {{ networking.api_vip }}
     api-int IN  A   {{ networking.api_vip }}
@@ -78,24 +72,6 @@ data:
 {% endfor %}
 {% endif %}
 {% endfor %}
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: keepalived-config
-  namespace: dns
-data:
-  keepalived.conf: |
-    vrrp_instance DNS_VIP {
-        interface net1
-        state BACKUP
-        virtual_router_id 53
-        priority 100
-        advert_int 1
-        virtual_ipaddress {
-            {{ networking.dns_network.vip }}/{{ networking.dns_network.cidr.split('/')[1] }}
-        }
-    }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -111,35 +87,28 @@ spec:
     metadata:
       labels:
         app: dns-server
-      annotations:
-        k8s.v1.cni.cncf.io/networks: dns-vlan
     spec:
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchExpressions:
-                  - key: app
-                    operator: In
-                    values:
-                      - dns-server
-              topologyKey: kubernetes.io/hostname
-      serviceAccountName: dns-server
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - dns-server
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: bind
           image: registry.access.redhat.com/hi/bind:latest
-          securityContext:
-            runAsUser: 25
-            runAsGroup: 25
-            capabilities:
-              add:
-                - NET_BIND_SERVICE
           ports:
             - name: dns-udp
-              containerPort: 53
+              containerPort: 8053
               protocol: UDP
             - name: dns-tcp
-              containerPort: 53
+              containerPort: 8053
               protocol: TCP
           volumeMounts:
             - name: config
@@ -149,11 +118,16 @@ spec:
             - name: zones
               mountPath: /var/named/zones
               readOnly: true
-          startupProbe:
+          readinessProbe:
             tcpSocket:
-              port: 53
-            failureThreshold: 30
+              port: 8053
+            initialDelaySeconds: 5
             periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 8053
+            initialDelaySeconds: 10
+            periodSeconds: 30
           resources:
             limits:
               cpu: "250m"
@@ -161,26 +135,6 @@ spec:
             requests:
               cpu: "100m"
               memory: "128Mi"
-        - name: keepalived
-          image: registry.redhat.io/openshift4/ose-keepalived-ipfailover-rhel9:v4.22
-          command: ["/usr/sbin/keepalived", "--dont-fork", "--log-console", "-f", "/etc/keepalived/keepalived.conf"]
-          securityContext:
-            runAsUser: 0
-            capabilities:
-              add:
-                - NET_ADMIN
-                - NET_RAW
-          volumeMounts:
-            - name: keepalived-config
-              mountPath: /etc/keepalived
-              readOnly: true
-          resources:
-            limits:
-              cpu: "50m"
-              memory: "64Mi"
-            requests:
-              cpu: "10m"
-              memory: "32Mi"
       volumes:
         - name: config
           configMap:
@@ -190,6 +144,39 @@ spec:
           configMap:
             name: dns-zones
             defaultMode: 0444
-        - name: keepalived-config
-          configMap:
-            name: keepalived-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dns-udp
+  namespace: dns
+  annotations:
+    metallb.io/allow-shared-ip: dns
+    metallb.io/loadBalancerIPs: {{ networking.dns_vip }}
+spec:
+  type: LoadBalancer
+  selector:
+    app: dns-server
+  ports:
+    - name: dns-udp
+      port: 53
+      targetPort: 8053
+      protocol: UDP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dns-tcp
+  namespace: dns
+  annotations:
+    metallb.io/allow-shared-ip: dns
+    metallb.io/loadBalancerIPs: {{ networking.dns_vip }}
+spec:
+  type: LoadBalancer
+  selector:
+    app: dns-server
+  ports:
+    - name: dns-tcp
+      port: 53
+      targetPort: 8053
+      protocol: TCP
