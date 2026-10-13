@@ -164,11 +164,8 @@ spec:
               cpu: "100m"
               memory: "128Mi"
         - name: keepalived
-          image: registry.access.redhat.com/ubi9/ubi:latest
-          command:
-            - sh
-            - -c
-            - dnf install -y keepalived && exec keepalived --dont-fork --log-console -f /etc/keepalived/keepalived.conf
+          image: registry.redhat.io/openshift4/ose-keepalived-ipfailover-rhel9:v4.22
+          command: ["/usr/sbin/keepalived", "--dont-fork", "--log-console", "-f", "/etc/keepalived/keepalived.conf"]
           securityContext:
             runAsUser: 0
             capabilities:
