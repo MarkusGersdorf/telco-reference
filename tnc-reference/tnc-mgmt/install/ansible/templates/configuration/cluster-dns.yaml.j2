@@ -100,6 +100,11 @@ spec:
                       values:
                         - dns-server
                 topologyKey: kubernetes.io/hostname
+      serviceAccountName: dns-server
+      securityContext:
+        runAsUser: 25
+        runAsGroup: 25
+        fsGroup: 25
       containers:
         - name: bind
           image: registry.access.redhat.com/hi/bind:latest
