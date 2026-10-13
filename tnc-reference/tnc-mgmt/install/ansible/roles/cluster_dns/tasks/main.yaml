@@ -22,11 +22,16 @@
 
 # --- SCC and networking ---
 
-- name: Grant anyuid SCC to dns-server service account
+- name: Render DNS server SCC
+  ansible.builtin.template:
+    src: configuration/dns-scc.yaml.j2
+    dest: "{{ config_stage_dir }}/dns-scc.yaml"
+    mode: "0644"
+
+- name: Apply DNS server SCC
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    adm policy add-scc-to-user anyuid
-    system:serviceaccount:dns:dns-server
+    apply -f {{ config_stage_dir }}/dns-scc.yaml
 
 - name: Render DNS VLAN NetworkAttachmentDefinition
   ansible.builtin.template:
