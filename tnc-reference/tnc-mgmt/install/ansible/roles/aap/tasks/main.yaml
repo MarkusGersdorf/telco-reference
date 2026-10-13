@@ -99,38 +99,41 @@
     label: "{{ item.name }}"
   no_log: true
 
+- name: Check if AAP encryption secrets exist
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n aap get secret {{ item }}
+  loop:
+    - aap-controller-secret-key
+    - aap-db-field-encryption
+    - aap-init-user
+  register: aap_secret_checks
+  failed_when: false
+  changed_when: false
+
 - name: Create controller secret key
   ansible.builtin.shell: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n aap create secret generic aap-controller-secret-key
     --from-literal=secret_key={{ lookup("ansible.builtin.password", "/dev/null length=64 chars=ascii_letters,digits") }}
-    --dry-run=client -o yaml |
-    oc --kubeconfig {{ kubeconfig_path }} apply -f -
   no_log: true
-  register: controller_key_result
-  changed_when: "'created' in controller_key_result.stdout"
+  when: aap_secret_checks.results[0].rc != 0
 
 - name: Create DB field encryption key
   ansible.builtin.shell: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n aap create secret generic aap-db-field-encryption
     --from-literal=secret_key={{ lookup("ansible.builtin.password", "/dev/null length=64 chars=ascii_letters,digits") }}
-    --dry-run=client -o yaml |
-    oc --kubeconfig {{ kubeconfig_path }} apply -f -
   no_log: true
-  register: encryption_key_result
-  changed_when: "'created' in encryption_key_result.stdout"
+  when: aap_secret_checks.results[1].rc != 0
 
 - name: Create admin init user secret
   ansible.builtin.shell: >
     oc --kubeconfig {{ kubeconfig_path }}
     -n aap create secret generic aap-init-user
     --from-literal=password={{ lookup("ansible.builtin.password", "/dev/null length=24 chars=ascii_letters,digits") }}
-    --dry-run=client -o yaml |
-    oc --kubeconfig {{ kubeconfig_path }} apply -f -
   no_log: true
-  register: init_user_result
-  changed_when: "'created' in init_user_result.stdout"
+  when: aap_secret_checks.results[2].rc != 0
 
 # --- NooBaa S3 for Hub ---
 
