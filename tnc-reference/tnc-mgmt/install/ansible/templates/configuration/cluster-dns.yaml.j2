@@ -22,8 +22,8 @@ data:
         pid-file none;
         session-keyfile none;
 
-        listen-on port 8053 { any; };
-        listen-on-v6 port 8053 { none; };
+        listen-on port 53 { any; };
+        listen-on-v6 port 53 { none; };
 
         recursion yes;
         allow-recursion { any; };
@@ -79,6 +79,24 @@ data:
 {% endif %}
 {% endfor %}
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: keepalived-config
+  namespace: dns
+data:
+  keepalived.conf: |
+    vrrp_instance DNS_VIP {
+        interface net1
+        state BACKUP
+        virtual_router_id 53
+        priority 100
+        advert_int 1
+        virtual_ipaddress {
+            {{ networking.dns_network.vip }}/{{ networking.dns_network.cidr.split('/')[1] }}
+        }
+    }
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -93,19 +111,19 @@ spec:
     metadata:
       labels:
         app: dns-server
+      annotations:
+        k8s.v1.cni.cncf.io/networks: dns-vlan
     spec:
       affinity:
         podAntiAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-            - weight: 100
-              podAffinityTerm:
-                labelSelector:
-                  matchExpressions:
-                    - key: app
-                      operator: In
-                      values:
-                        - dns-server
-                topologyKey: kubernetes.io/hostname
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchExpressions:
+                  - key: app
+                    operator: In
+                    values:
+                      - dns-server
+              topologyKey: kubernetes.io/hostname
       serviceAccountName: dns-server
       securityContext:
         runAsUser: 25
@@ -116,10 +134,10 @@ spec:
           image: registry.access.redhat.com/hi/bind:latest
           ports:
             - name: dns-udp
-              containerPort: 8053
+              containerPort: 53
               protocol: UDP
             - name: dns-tcp
-              containerPort: 8053
+              containerPort: 53
               protocol: TCP
           volumeMounts:
             - name: config
@@ -131,12 +149,12 @@ spec:
               readOnly: true
           readinessProbe:
             tcpSocket:
-              port: 8053
+              port: 53
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             tcpSocket:
-              port: 8053
+              port: 53
             initialDelaySeconds: 10
             periodSeconds: 30
           resources:
@@ -146,6 +164,28 @@ spec:
             requests:
               cpu: "100m"
               memory: "128Mi"
+        - name: keepalived
+          image: registry.access.redhat.com/ubi9/ubi:latest
+          command:
+            - sh
+            - -c
+            - dnf install -y keepalived && exec keepalived --dont-fork --log-console -f /etc/keepalived/keepalived.conf
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+                - NET_RAW
+          volumeMounts:
+            - name: keepalived-config
+              mountPath: /etc/keepalived
+              readOnly: true
+          resources:
+            limits:
+              cpu: "50m"
+              memory: "64Mi"
+            requests:
+              cpu: "10m"
+              memory: "32Mi"
       volumes:
         - name: config
           configMap:
@@ -155,39 +195,6 @@ spec:
           configMap:
             name: dns-zones
             defaultMode: 0444
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: dns-udp
-  namespace: dns
-  annotations:
-    metallb.io/allow-shared-ip: dns
-    metallb.io/loadBalancerIPs: {{ networking.dns_network.vip }}
-spec:
-  type: LoadBalancer
-  selector:
-    app: dns-server
-  ports:
-    - name: dns-udp
-      port: 53
-      targetPort: 8053
-      protocol: UDP
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: dns-tcp
-  namespace: dns
-  annotations:
-    metallb.io/allow-shared-ip: dns
-    metallb.io/loadBalancerIPs: {{ networking.dns_network.vip }}
-spec:
-  type: LoadBalancer
-  selector:
-    app: dns-server
-  ports:
-    - name: dns-tcp
-      port: 53
-      targetPort: 8053
-      protocol: TCP
+        - name: keepalived-config
+          configMap:
+            name: keepalived-config
