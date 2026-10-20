@@ -1,8 +1,33 @@
 ---
+# The build directory is created by the manifests role, which only runs in the
+# install play. Create it here too so the configure play can run on its own
+# against an already-installed cluster.
+- name: Ensure build directory exists
+  ansible.builtin.file:
+    path: "{{ build_dir }}"
+    state: directory
+    mode: "0755"
+
 - name: Clean staging area
   ansible.builtin.file:
     path: "{{ config_stage_dir }}"
     state: absent
+
+# cp -rL dereferences symlinks, and reference-crs points into the
+# telco-reference submodule. An uninitialised submodule leaves it dangling and
+# the copy fails on a stat error that says nothing about submodules.
+- name: Check that the telco-reference submodule is checked out
+  ansible.builtin.stat:
+    path: "{{ config_src_dir }}/reference-crs/required"
+  register: reference_crs
+
+- name: Fail when the submodule is missing
+  ansible.builtin.fail:
+    msg: >-
+      {{ config_src_dir }}/reference-crs does not resolve. The telco-reference
+      submodule is not checked out — run
+      'git submodule update --init --recursive' in the repository root.
+  when: not reference_crs.stat.exists
 
 - name: Copy configuration tree to staging area (dereference symlinks)
   ansible.builtin.command: cp -rL {{ config_src_dir }} {{ config_stage_dir }}
