@@ -236,11 +236,23 @@
     -n aap exec aap-postgres-1 -- psql -U postgres -c
     "ALTER ROLE {{ aap_db_username }} SUPERUSER;"
 
-- name: Install hstore extension in automationhub database
+- name: Install required extensions in AAP databases
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    -n aap exec aap-postgres-1 -- psql -U postgres -d automationhub -c
-    "CREATE EXTENSION IF NOT EXISTS hstore;"
+    -n aap exec aap-postgres-1 -- psql -U postgres -d {{ item.database }} -c
+    "CREATE EXTENSION IF NOT EXISTS {{ item.extension }};"
+  loop:
+    - { database: automationcontroller, extension: pg_trgm }
+    - { database: automationcontroller, extension: btree_gist }
+    - { database: automationcontroller, extension: hstore }
+    - { database: automationhub, extension: pg_trgm }
+    - { database: automationhub, extension: btree_gist }
+    - { database: automationhub, extension: hstore }
+    - { database: eda, extension: pg_trgm }
+    - { database: eda, extension: btree_gist }
+    - { database: eda, extension: hstore }
+  loop_control:
+    label: "{{ item.database }}/{{ item.extension }}"
 
 # --- Deploy AAP ---
 
