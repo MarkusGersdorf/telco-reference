@@ -144,15 +144,19 @@
 
 - name: Create NetBox Keycloak client secret
   ansible.builtin.shell: |
+    cat <<'PYEOF' > /tmp/keycloak.py
+    SOCIAL_AUTH_KEYCLOAK_KEY = "netbox"
+    SOCIAL_AUTH_KEYCLOAK_SECRET = "{{ vault_netbox_client_secret.stdout }}"
+    SOCIAL_AUTH_KEYCLOAK_PUBLIC_KEY = "{{ keycloak_realm_info.json.public_key }}"
+    SOCIAL_AUTH_KEYCLOAK_AUTHORIZATION_URL = "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}/protocol/openid-connect/auth"
+    SOCIAL_AUTH_KEYCLOAK_ACCESS_TOKEN_URL = "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}/protocol/openid-connect/token"
+    PYEOF
     oc --kubeconfig {{ kubeconfig_path }} \
       -n netbox create secret generic netbox-keycloak-client \
-      --from-literal=SOCIAL_AUTH_KEYCLOAK_KEY=netbox \
-      --from-literal=SOCIAL_AUTH_KEYCLOAK_SECRET={{ vault_netbox_client_secret.stdout }} \
-      --from-literal=SOCIAL_AUTH_KEYCLOAK_PUBLIC_KEY={{ keycloak_realm_info.json.public_key }} \
-      --from-literal=SOCIAL_AUTH_KEYCLOAK_AUTHORIZATION_URL=https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}/protocol/openid-connect/auth \
-      --from-literal=SOCIAL_AUTH_KEYCLOAK_ACCESS_TOKEN_URL=https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}/protocol/openid-connect/token \
+      --from-file=keycloak.py=/tmp/keycloak.py \
       --dry-run=client -o yaml | \
     oc --kubeconfig {{ kubeconfig_path }} apply -f -
+    rm -f /tmp/keycloak.py
   no_log: true
 
 # --- Deploy NetBox via Helm ---
