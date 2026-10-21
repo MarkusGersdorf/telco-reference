@@ -92,9 +92,13 @@ readinessProbe:
 livenessProbe:
   initialDelaySeconds: 0
 extraConfig:
-  - secret:
-      secretName: netbox-keycloak-client
   - values:
+      SOCIAL_AUTH_KEYCLOAK_KEY: "netbox"
+      SOCIAL_AUTH_KEYCLOAK_SECRET: "{{ vault_netbox_client_secret.stdout }}"
+      SOCIAL_AUTH_KEYCLOAK_PUBLIC_KEY: "{{ keycloak_realm_info.json.public_key }}"
+      SOCIAL_AUTH_KEYCLOAK_AUTHORIZATION_URL: "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}/protocol/openid-connect/auth"
+      SOCIAL_AUTH_KEYCLOAK_ACCESS_TOKEN_URL: "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}/protocol/openid-connect/token"
+      SOCIAL_AUTH_REDIRECT_IS_HTTPS: true
       SOCIAL_AUTH_PIPELINE:
         - "social_core.pipeline.social_auth.social_details"
         - "social_core.pipeline.social_auth.social_uid"

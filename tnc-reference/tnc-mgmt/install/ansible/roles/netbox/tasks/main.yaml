@@ -15,18 +15,37 @@
   args:
     stdin: "{{ netbox_ns_yaml.stdout }}"
 
-- name: Render NetBox manifests
+# --- Keycloak settings (needed before Helm values render) ---
+
+- name: Read NetBox Keycloak client secret from Vault
+  ansible.builtin.command: >
+    oc --kubeconfig {{ kubeconfig_path }}
+    -n vault exec vault-0 --
+    sh -c 'VAULT_TOKEN={{ vault_root_token }}
+    vault kv get -field=secret {{ configuration.vault.secret_path }}/keycloak/clients/netbox'
+  register: vault_netbox_client_secret
+  no_log: true
+
+- name: Fetch Keycloak realm public key
+  ansible.builtin.uri:
+    url: "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}"
+    validate_certs: false
+  register: keycloak_realm_info
+
+# --- Render templates ---
+
+- name: Render NetBox ExternalSecrets
   ansible.builtin.template:
-    src: "configuration/{{ item.src }}"
-    dest: "{{ config_stage_dir }}/{{ item.dest }}"
+    src: configuration/netbox-external-secrets.yaml.j2
+    dest: "{{ config_stage_dir }}/netbox-external-secrets.yaml"
     mode: "0644"
-  loop:
-    - src: netbox-external-secrets.yaml.j2
-      dest: netbox-external-secrets.yaml
-    - src: netbox-helm-values.yaml.j2
-      dest: netbox-helm-values.yaml
-  loop_control:
-    label: "{{ item.dest }}"
+
+- name: Render NetBox Helm values
+  ansible.builtin.template:
+    src: configuration/netbox-helm-values.yaml.j2
+    dest: "{{ config_stage_dir }}/netbox-helm-values.yaml"
+    mode: "0600"
+  no_log: true
 
 # --- ExternalSecrets ---
 
@@ -125,59 +144,16 @@
   delay: 15
   changed_when: false
 
-# --- Keycloak client secret ---
-
-- name: Read NetBox Keycloak client secret from Vault
-  ansible.builtin.command: >
-    oc --kubeconfig {{ kubeconfig_path }}
-    -n vault exec vault-0 --
-    sh -c 'VAULT_TOKEN={{ vault_root_token }}
-    vault kv get -field=secret {{ configuration.vault.secret_path }}/keycloak/clients/netbox'
-  register: vault_netbox_client_secret
-  no_log: true
-
-- name: Fetch Keycloak realm public key
-  ansible.builtin.uri:
-    url: "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}"
-    validate_certs: false
-  register: keycloak_realm_info
-
-- name: Create NetBox Keycloak client secret
-  ansible.builtin.shell: |
-    cat <<'PYEOF' > /tmp/keycloak.py
-    SOCIAL_AUTH_KEYCLOAK_KEY = "netbox"
-    SOCIAL_AUTH_KEYCLOAK_SECRET = "{{ vault_netbox_client_secret.stdout }}"
-    SOCIAL_AUTH_KEYCLOAK_PUBLIC_KEY = "{{ keycloak_realm_info.json.public_key }}"
-    SOCIAL_AUTH_KEYCLOAK_AUTHORIZATION_URL = "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}/protocol/openid-connect/auth"
-    SOCIAL_AUTH_KEYCLOAK_ACCESS_TOKEN_URL = "https://keycloak.apps.{{ cluster.name }}.{{ cluster.base_domain }}/realms/{{ configuration.keycloak.realm }}/protocol/openid-connect/token"
-    PYEOF
-    oc --kubeconfig {{ kubeconfig_path }} \
-      -n netbox create secret generic netbox-keycloak-client \
-      --from-file=keycloak.py=/tmp/keycloak.py \
-      --dry-run=client -o yaml | \
-    oc --kubeconfig {{ kubeconfig_path }} apply -f -
-    rm -f /tmp/keycloak.py
-  no_log: true
-
 # --- Deploy NetBox via Helm ---
-
-- name: Check if NetBox is already deployed
-  ansible.builtin.command: >
-    helm status netbox --namespace netbox --kubeconfig {{ kubeconfig_path }}
-  register: netbox_helm_status
-  failed_when: false
-  changed_when: false
 
 - name: Add NetBox Helm repository
   ansible.builtin.command: helm repo add netbox https://charts.netbox.oss.netboxlabs.com
   register: helm_repo
   changed_when: "'has been added' in helm_repo.stdout"
   failed_when: helm_repo.rc != 0 and 'already exists' not in helm_repo.stderr
-  when: netbox_helm_status.rc != 0
 
 - name: Update Helm repositories
   ansible.builtin.command: helm repo update netbox
-  when: netbox_helm_status.rc != 0
 
 - name: Deploy NetBox via Helm
   ansible.builtin.command: >
@@ -188,7 +164,6 @@
     --values {{ config_stage_dir }}/netbox-helm-values.yaml
     --timeout 10m
     --wait
-  when: netbox_helm_status.rc != 0
 
 - name: NetBox ready
   ansible.builtin.debug:
