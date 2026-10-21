@@ -296,7 +296,7 @@ configuration:
       - cpu_architecture: x86_64
         openshift_version: "4.22"
         rootfs_url: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.22/latest/rhcos-live-rootfs.x86_64.img
-        iso_url: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.22/latest/rhcos-live.x86_64.iso
+        iso_url: https://mirror.openshift.com/pub/openshift-v4/x86_64/dependencies/rhcos/4.22/latest/rhcos-live-iso.x86_64.iso
         version: "9.8.20260428-0"
 
   # Vault Enterprise — server deployment (Helm) and ClusterSecretStore config.
