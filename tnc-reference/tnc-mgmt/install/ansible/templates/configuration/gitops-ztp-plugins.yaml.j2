@@ -75,13 +75,13 @@
         cpu: 250m
         memory: 512Mi
 
-# ApplicationSet generates the per-cluster Applications, so it scales with
-# fleet size too. HA is leader-election based -- the second replica is a
-# standby, not an active shard.
+# ApplicationSet generates the per-cluster Applications, so it needs headroom
+# as the fleet grows. It cannot be scaled out: the ArgoCD v1beta1 schema has
+# no applicationSet.replicas field, and strict decoding rejects the CR if one
+# is set. Resources only.
 - op: add
   path: "/spec/policy-templates/0/objectDefinition/spec/object-templates/0/objectDefinition/spec/applicationSet"
   value:
-    replicas: 2
     resources:
       limits:
         cpu: "2"
