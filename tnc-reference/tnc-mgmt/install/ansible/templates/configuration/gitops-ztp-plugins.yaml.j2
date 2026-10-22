@@ -34,6 +34,28 @@
 # The application controller does not scale by plain replicas -- each replica
 # owns a shard of the managed clusters. This is the setting that matters for
 # fleet size: raise replicas as clusters are added.
+# ha.resources covers the HAProxy side; the Redis containers themselves are
+# configured separately and would otherwise run unbounded.
+- op: add
+  path: "/spec/policy-templates/0/objectDefinition/spec/object-templates/0/objectDefinition/spec/redis"
+  value:
+    resources:
+      limits:
+        cpu: 500m
+        memory: 256Mi
+      requests:
+        cpu: 250m
+        memory: 128Mi
+
+# Concurrency of the controller's work queues, defaulting to 10 operation and
+# 20 status. Operation processors bound how many syncs run at once, so this is
+# the knob that limits throughput once a fleet is reconciling in parallel.
+- op: add
+  path: "/spec/policy-templates/0/objectDefinition/spec/object-templates/0/objectDefinition/spec/controller/processors"
+  value:
+    operation: 20
+    status: 20
+
 - op: add
   path: "/spec/policy-templates/0/objectDefinition/spec/object-templates/0/objectDefinition/spec/controller/sharding"
   value:
@@ -61,12 +83,14 @@
     cpu: "1"
     memory: 4Gi
 
-# API/UI. Stateless and sits behind the route, so two replicas remove it as a
-# single point of failure without needing more.
+# API/UI. Autoscaled rather than pinned to a replica count, so it follows
+# console and CLI load. Note the two are mutually exclusive -- the operator
+# ignores server.replicas whenever autoscale is enabled.
 - op: add
   path: "/spec/policy-templates/0/objectDefinition/spec/object-templates/0/objectDefinition/spec/server"
   value:
-    replicas: 2
+    autoscale:
+      enabled: true
     resources:
       limits:
         cpu: "2"
