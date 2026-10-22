@@ -1,0 +1,16 @@
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../other-crs/optional/loki/
+
+patches:
+  # Sizing and storage come from vars.yaml -- the committed patch below holds
+  # example values and is re-rendered into the staging area by stage_config.
+  - target:
+      group: loki.grafana.com
+      version: v1
+      kind: LokiStack
+      name: logging-loki
+    path: lokistack-patch.yaml

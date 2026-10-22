@@ -7,71 +7,54 @@
     argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
     argocd.argoproj.io/compare-options: IgnoreExtraneous
 
+# Logs go to the in-cluster LokiStack. The upstream CR forwards to Kafka,
+# which this deployment does not run -- see overlays/loki.
 - op: replace
   path: /spec
   value:
     managementState: Managed
+    filters:
+     - name: telco-hub-labels
+       type: openshiftLabels
+       openshiftLabels:
+         cluster-role: hub
+         environment: production
+         telco-component: management
     outputs:
-     - name: infra-logs
-       type: kafka
-       kafka:
-         url: tls://mgmt-kafka-kafka-bootstrap-kafka-cluster.apps.mgmt1.example.com:443/mgmt1-infra-logs
+     - name: default-lokistack
+       type: lokiStack
+       lokiStack:
+         target:
+           name: logging-loki
+           namespace: openshift-logging
+         authentication:
+           token:
+             from: serviceAccount
        tls:
-         insecureSkipVerify: true
          ca:
-           key: ca-bundle.crt
-           secretName: kafka-secret
-         certificate:
-           key: tls.crt
-           secretName: kafka-secret
-         key:
-           key: tls.key
-           secretName: kafka-secret
-     - name: audit-logs
-       type: kafka
-       kafka:
-         url: tls://mgmt-kafka-kafka-bootstrap-kafka-cluster.apps.mgmt1.example.com:443/mgmt1-audit-logs
-       tls:
-         insecureSkipVerify: true
-         ca:
-           key: ca-bundle.crt
-           secretName: kafka-secret
-         certificate:
-           key: tls.crt
-           secretName: kafka-secret
-         key:
-           key: tls.key
-           secretName: kafka-secret
-     - name: app-logs
-       type: kafka
-       kafka:
-         url: tls://mgmt-kafka-kafka-bootstrap-kafka-cluster.apps.mgmt1.example.com:443/mgmt1-app-logs
-       tls:
-         insecureSkipVerify: true
-         ca:
-           key: ca-bundle.crt
-           secretName: kafka-secret
-         certificate:
-           key: tls.crt
-           secretName: kafka-secret
-         key:
-           key: tls.key
-           secretName: kafka-secret
+           key: service-ca.crt
+           configMapName: openshift-service-ca.crt
     pipelines:
      - name: infra-pipe
+       filterRefs:
+       - telco-hub-labels
        inputRefs:
        - infrastructure
        outputRefs:
-       - infra-logs
+       - default-lokistack
      - name: audit-pipe
+       filterRefs:
+       - telco-hub-labels
        inputRefs:
        - audit
        outputRefs:
-       - audit-logs
+       - default-lokistack
      - name: app-pipe
+       filterRefs:
+       - telco-hub-labels
        inputRefs:
        - application
        outputRefs:
-       - app-logs
+       - default-lokistack
     serviceAccount:
       name: collector

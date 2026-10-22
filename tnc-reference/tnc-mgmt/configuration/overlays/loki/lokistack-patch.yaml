@@ -1,0 +1,16 @@
+---
+# patching LokiStack sizing and storage
+#
+# Supported production sizes are 1x.extra-small, 1x.small and 1x.medium
+# (1x.demo is the unsupported one). extra-small takes 100GB/day, which is
+# ample for a hub, and its PVC total is identical to 1x.small at 430Gi --
+# the difference is 14 vCPU / 31Gi versus 34 vCPU / 67Gi, so the larger size
+# costs compute without buying storage headroom.
+
+- op: replace
+  path: /spec/size
+  value: "1x.extra-small"
+
+- op: replace
+  path: /spec/storageClassName
+  value: "ocs-storagecluster-ceph-rbd"
