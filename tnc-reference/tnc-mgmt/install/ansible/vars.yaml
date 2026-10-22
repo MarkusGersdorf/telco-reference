@@ -123,6 +123,7 @@ configuration:
     - vault
     - quay
     - logging
+    - loki            # log store for logging; enable both or neither
     - cnv
     - keycloak
     - netbox

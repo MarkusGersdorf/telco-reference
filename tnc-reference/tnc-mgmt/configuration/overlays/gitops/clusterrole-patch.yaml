@@ -72,3 +72,13 @@
     - hyperconvergeds
     verbs:
     - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - loki.grafana.com
+    resources:
+    - lokistacks
+    verbs:
+    - '*'

@@ -1,0 +1,29 @@
+---
+# Log store for the hub. Object storage is NooBaa, reached over the internal
+# s3.openshift-storage service so the service CA validates it -- the loki-s3
+# secret is assembled by the loki ansible role from the shared NooBaa account.
+# Sizing and storage class are patched from vars.yaml in overlays/loki.
+apiVersion: loki.grafana.com/v1
+kind: LokiStack
+metadata:
+  name: logging-loki
+  namespace: openshift-logging
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  managementState: Managed
+  size: 1x.small
+  storageClassName: ocs-storagecluster-ceph-rbd
+  storage:
+    schemas:
+      - version: v13
+        effectiveDate: "2024-10-01"
+    secret:
+      name: loki-s3
+      type: s3
+    tls:
+      caName: openshift-service-ca.crt
+      caKey: service-ca.crt
+  tenants:
+    mode: openshift-logging

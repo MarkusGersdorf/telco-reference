@@ -37,6 +37,11 @@ resources:
 {% if 'logging' in configuration.components %}
   - overlays/logging
 {% endif %}
+{% if 'loki' in configuration.components %}
+  # Log store for the logging overlay's ClusterLogForwarder. Without it the
+  # forwarder has no destination, so enable both or neither.
+  - overlays/loki/
+{% endif %}
 {% if 'monitoring-kafka' in configuration.components %}
   - overlays/monitoring-kafka
 {% endif %}
