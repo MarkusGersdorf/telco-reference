@@ -2,14 +2,15 @@
 # patching LokiStack sizing and storage
 #
 # Supported production sizes are 1x.extra-small, 1x.small and 1x.medium
-# (1x.demo is the unsupported one). extra-small takes 100GB/day, which is
-# ample for a hub, and its PVC total is identical to 1x.small at 430Gi --
-# the difference is 14 vCPU / 31Gi versus 34 vCPU / 67Gi, so the larger size
-# costs compute without buying storage headroom.
+# (1x.demo is the unsupported one). 1x.small carries 500GB/day against
+# extra-small's 100GB/day for the same 430Gi of PVCs -- the cost is compute,
+# 34 vCPU / 67Gi of requests versus 14 / 31. A hub whose collectors fill a
+# 2Gi buffer quickly is not a 100GB/day cluster, and the workers have the
+# headroom, so size for the volume rather than the storage.
 
 - op: replace
   path: /spec/size
-  value: "1x.extra-small"
+  value: "1x.small"
 
 - op: replace
   path: /spec/storageClassName

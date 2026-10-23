@@ -107,10 +107,22 @@
           - "{{ {'spec': {'overrides': {'components': mce_components_patched}}} | to_json }}"
       when: msa_enabled_count | int == 0
 
+# The kustomization creates operator Subscriptions and the custom resources
+# those operators define in a single pass, so on the run that first enables a
+# component the CR fails with "no matches for kind" -- the CRD does not exist
+# until OLM has installed the operator. ArgoCD orders this with sync waves;
+# oc apply -k has no equivalent, so retry until the CRDs catch up. Everything
+# here is idempotent, and a genuine failure still surfaces, just later.
 - name: Apply full configuration via kustomize
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
     apply -k {{ config_stage_dir }}
+  register: kustomize_apply
+  until: kustomize_apply.rc == 0
+  retries: 10
+  delay: 30
+  changed_when: >-
+    'created' in kustomize_apply.stdout or 'configured' in kustomize_apply.stdout
 
 # --- Verify the ACM managed clusters reached ArgoCD ---
 
