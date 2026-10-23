@@ -1,8 +1,8 @@
 ---
-# Log store for the hub. Object storage is NooBaa, reached over the internal
-# s3.openshift-storage service so the service CA validates it -- the loki-s3
-# secret is assembled by the loki ansible role from the shared NooBaa account.
-# Sizing and storage class are patched from vars.yaml in overlays/loki.
+# Log store for the hub. Object storage is a NooBaa bucket claimed by
+# LokiBucket.yaml, reached over the internal s3.openshift-storage service so
+# the service CA validates it -- hence the tls block, which instances using
+# the NooBaa route do not need. Sizing is patched in overlays/loki.
 apiVersion: loki.grafana.com/v1
 kind: LokiStack
 metadata:
@@ -15,10 +15,21 @@ spec:
   managementState: Managed
   size: 1x.small
   storageClassName: ocs-storagecluster-ceph-rbd
+  # Loki is only tested and supported for short-term storage, 30 days at
+  # most. Without these the bucket and index grow unbounded and a single
+  # noisy namespace can starve the others.
+  limits:
+    global:
+      retention:
+        days: 30
+      ingestion:
+        ingestionRate: 50
+        ingestionBurstSize: 100
+        maxGlobalStreamsPerTenant: 50000
   storage:
     schemas:
       - version: v13
-        effectiveDate: "2024-10-01"
+        effectiveDate: "2024-01-01"
     secret:
       name: loki-s3
       type: s3
