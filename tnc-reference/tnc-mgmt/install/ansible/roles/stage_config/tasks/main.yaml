@@ -111,6 +111,9 @@
     - src: keycloak-certificate.yaml.j2
       dest: other-crs/optional/keycloak/keycloak-certificate.yaml
       component: keycloak
+    - src: keycloak-cnpg-cluster.yaml.j2
+      dest: other-crs/optional/keycloak/keycloak-cnpg-cluster.yaml
+      component: keycloak
   loop_control:
     label: "{{ item.dest | basename }}"
   when: >-

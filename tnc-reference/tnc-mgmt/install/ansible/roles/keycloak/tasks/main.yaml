@@ -91,13 +91,13 @@
 - name: Render Keycloak CNPG cluster manifest
   ansible.builtin.template:
     src: configuration/keycloak-cnpg-cluster.yaml.j2
-    dest: "{{ config_stage_dir }}/keycloak-cnpg-cluster.yaml"
+    dest: "{{ config_stage_dir }}/other-crs/optional/keycloak/keycloak-cnpg-cluster.yaml"
     mode: "0644"
 
 - name: Deploy CNPG PostgreSQL cluster for Keycloak
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    apply -f {{ config_stage_dir }}/keycloak-cnpg-cluster.yaml
+    apply -f {{ config_stage_dir }}/other-crs/optional/keycloak/keycloak-cnpg-cluster.yaml
 
 - name: Wait for Keycloak CNPG cluster to be ready
   ansible.builtin.command: >
