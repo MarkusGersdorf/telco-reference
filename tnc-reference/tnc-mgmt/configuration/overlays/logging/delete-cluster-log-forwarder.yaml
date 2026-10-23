@@ -1,0 +1,16 @@
+---
+# Removes the ClusterLogForwarder the upstream reference ships. It lives in
+# the telco-reference submodule so it cannot be dropped from the resource
+# list; $patch: delete takes it out of the build instead, the same way the
+# gitops overlay removes argocd-tls-certs-cm.
+#
+# Deleting the forwarder stops the collector DaemonSet, and with it all log
+# collection. The cluster-logging operator, the collector ServiceAccount and
+# its RBAC stay in place, so restoring collection is a matter of swapping the
+# patch path back in overlays/logging/kustomization.yaml.
+apiVersion: observability.openshift.io/v1
+kind: ClusterLogForwarder
+metadata:
+  name: instance
+  namespace: openshift-logging
+$patch: delete
