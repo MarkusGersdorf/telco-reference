@@ -7,10 +7,13 @@ resources:
   - ../../other-crs/optional/logging/
 
 patches:
-  # Customize ClusterLogForwarder for hub-specific configuration
+  # Customize ClusterLogForwarder for hub-specific configuration.
+  # Swap the path back to cluster-log-forwarder-patch.yaml to restore
+  # collection -- the patch is kept alongside, not deleted.
   - target:
       group: observability.openshift.io
       version: v1
       kind: ClusterLogForwarder
       name: instance
-    path: cluster-log-forwarder-patch.yaml
+    #path: cluster-log-forwarder-patch.yaml
+    path: delete-cluster-log-forwarder.yaml
