@@ -1,0 +1,26 @@
+---
+# Three things upstream's MultiClusterHub asks for that ACM 2.17 will not
+# accept, so the live object can never match Git and the Application sits
+# permanently OutOfSync.
+
+# enableClusterBackup was replaced by the cluster-backup entry in
+# overrides.components, which this CR already sets, and the field was then
+# removed from the API. separateCertificateManagement went the same way.
+# The server drops both, so Git asks for something live cannot hold.
+- op: remove
+  path: /spec/enableClusterBackup
+
+- op: remove
+  path: /spec/separateCertificateManagement
+
+# cluster-permission is an MCE component, not an MCH one -- it appears in
+# MultiClusterEngine's overrides on a healthy 2.17 hub and is added there by
+# acmMCE-patch.yaml. The MCH rejects it. The test guards the index: upstream
+# addressing is positional, so if the list is ever reordered the build fails
+# loudly instead of silently removing the wrong component.
+- op: test
+  path: /spec/overrides/components/2/name
+  value: cluster-permission
+
+- op: remove
+  path: /spec/overrides/components/2

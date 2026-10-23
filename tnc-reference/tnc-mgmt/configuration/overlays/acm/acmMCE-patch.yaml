@@ -1,0 +1,24 @@
+---
+# The MCE operator appends components to spec.overrides.components as new
+# ones ship, so the pinned upstream list goes out of date on every upgrade
+# and ArgoCD reports the live additions as drift. These two arrived in MCE
+# 2.17; the enabled values are the operator's own defaults, taken from a
+# healthy 2.17.3 instance.
+#
+# Note the backplane-operator owns each entry (the CRD declares name as a
+# list-map key), so this is Git catching up with the operator rather than
+# Git asserting something new.
+
+- op: add
+  path: /spec/overrides/components/-
+  value:
+    configOverrides: {}
+    enabled: true
+    name: cluster-permission
+
+- op: add
+  path: /spec/overrides/components/-
+  value:
+    configOverrides: {}
+    enabled: false
+    name: maestro-preview
