@@ -31,6 +31,22 @@ patches:
       name: mirror-registry-config
     path: acmMirrorRegistryCM-patch.yaml
 
+  # reconcile the pinned component list with what MCE 2.17 actually manages
+  - target:
+      group: multicluster.openshift.io
+      version: v1
+      kind: MultiClusterEngine
+      name: multiclusterengine
+    path: acmMCE-patch.yaml
+
+  # drop fields and components ACM 2.17 will not accept
+  - target:
+      group: operator.open-cluster-management.io
+      version: v1
+      kind: MultiClusterHub
+      name: multiclusterhub
+    path: acmMCH-patch.yaml
+
   ######
   # For deployment of MGMT cluster on single node (SNO)
   # uncomment the following lines to
