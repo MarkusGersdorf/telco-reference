@@ -1,10 +1,19 @@
 ---
 # Example values -- rendered from vars.yaml by stage_config and by the
 # keycloak role, which bootstraps from the same file. Edit the .j2 template.
-# Reencrypt rather than edge: Keycloak serves TLS on 8443 itself now, so the
-# router re-encrypts to the pod instead of speaking plain HTTP to 8080.
-# No destinationCACertificate is needed because keycloak-tls-secret holds a
-# publicly trusted chain from the same ClusterIssuer as the wildcard.
+# Passthrough, not reencrypt. Keycloak serves TLS on 8443 with a Let's
+# Encrypt certificate for this exact host, so the router has nothing useful
+# to add by terminating and re-establishing: it forwards the connection and
+# the client validates Keycloak's certificate directly.
+#
+# Reencrypt was tried first and the router would not accept the backend
+# certificate. Passthrough sidesteps that entirely -- no destinationCACertificate,
+# no trust store question, one fewer place for the chain to be wrong.
+#
+# The trade is that the router cannot read or add to the request, so no
+# X-Forwarded-* headers reach Keycloak. That is why spec.hostname.hostname
+# is set on the CR: Keycloak builds issuer and redirect URLs from it rather
+# than from headers. Routing is by SNI.
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:
@@ -18,5 +27,5 @@ spec:
   port:
     targetPort: https
   tls:
-    termination: reencrypt
+    termination: passthrough
     insecureEdgeTerminationPolicy: Redirect
