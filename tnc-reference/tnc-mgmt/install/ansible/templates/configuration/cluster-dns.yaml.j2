@@ -70,6 +70,13 @@ data:
 {% for record in networking.extra_dns_records | default([]) %}
     {{ record.name }}    IN  {{ record.type }}   {{ record.value }}
 {% endfor %}
+{% else %}
+{% set extra_zone = networking.extra_zones | default([]) | selectattr('name', 'equalto', zone) | first | default(none) %}
+{% if extra_zone is not none %}
+{% for record in extra_zone.records | default([]) %}
+    {{ record.name }}    IN  {{ record.type }}   {{ record.value }}
+{% endfor %}
+{% endif %}
 {% endif %}
 {% endfor %}
 ---
