@@ -54,6 +54,11 @@ resources:
 {% if 'cnv' in configuration.components %}
   - other-crs/optional/cnv/
 {% endif %}
+{% if 'keycloak' in configuration.components %}
+  # NetworkPolicies only. Keycloak itself is still deployed by the keycloak
+  # role, but the policies are static manifests so ArgoCD can hold them.
+  - other-crs/optional/keycloak/
+{% endif %}
 {% if 'hub-add-ons' in configuration.components %}
   # Creates the hub-add-ons Application, which in turn syncs
   # configuration/add-ons. Only the parent is rendered here -- the children
