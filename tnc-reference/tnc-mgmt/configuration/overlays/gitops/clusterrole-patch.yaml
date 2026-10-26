@@ -82,3 +82,156 @@
     - lokistacks
     verbs:
     - '*'
+
+# The Helm add-ons bring resource kinds the hub role never needed before.
+# Everything ArgoCD managed until now was a custom resource -- it creates a
+# StorageCluster or a MultiClusterHub and the operator creates the workloads
+# underneath. The charts are the first time ArgoCD owns Deployments, Services
+# and the rest itself, so none of the ordinary workload groups were granted.
+#
+# Enumerated by rendering both charts with this repo's own values rather than
+# chart defaults, which is how the CronJob and Ingress below were caught:
+#
+#   netbox  core, apps, batch, networking.k8s.io, policy, rbac
+#   vault   core, apps, rbac, admissionregistration.k8s.io
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - ""
+    resources:
+    # secrets and serviceaccounts are already granted by the base role.
+    - configmaps
+    - services
+    - persistentvolumeclaims
+    - pods
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - apps
+    resources:
+    - deployments
+    - statefulsets
+    - daemonsets
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - batch
+    resources:
+    # The netbox chart renders a housekeeping CronJob under this repo's
+    # values, though not under the chart defaults.
+    - cronjobs
+    - jobs
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - rbac.authorization.k8s.io
+    resources:
+    # netbox renders Role and RoleBinding, vault the cluster-scoped pair.
+    - roles
+    - rolebindings
+    - clusterroles
+    - clusterrolebindings
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - networking.k8s.io
+    resources:
+    # networkpolicies for the keycloak overlay and the netbox chart;
+    # ingresses because the netbox chart renders them when enabled.
+    - networkpolicies
+    - ingresses
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - policy
+    resources:
+    - poddisruptionbudgets
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - admissionregistration.k8s.io
+    resources:
+    # The vault chart ships a MutatingWebhookConfiguration for the agent
+    # injector. Not yet reached, but it is the next wall on that Application.
+    - mutatingwebhookconfigurations
+    - validatingwebhookconfigurations
+    verbs:
+    - '*'
+
+# The keycloak overlay moved kinds into the tree that only ansible used to
+# apply, so ArgoCD had never needed them either. Without these the whole
+# overlay fails to sync -- which is how the NetworkPolicies came to be
+# missing while the objects ansible had already applied stayed up, making it
+# look like the policies simply had not been written.
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - k8s.keycloak.org
+    resources:
+    - keycloaks
+    - keycloakrealmimports
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - route.openshift.io
+    resources:
+    - routes
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - cert-manager.io
+    resources:
+    - certificates
+    - issuers
+    - clusterissuers
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - postgresql.k8s.enterprisedb.io
+    resources:
+    - clusters
+    - scheduledbackups
+    - backups
+    - poolers
+    verbs:
+    - '*'
