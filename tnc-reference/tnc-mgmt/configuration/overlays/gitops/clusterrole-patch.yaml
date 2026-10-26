@@ -183,3 +183,55 @@
     - validatingwebhookconfigurations
     verbs:
     - '*'
+
+# The keycloak overlay moved kinds into the tree that only ansible used to
+# apply, so ArgoCD had never needed them either. Without these the whole
+# overlay fails to sync -- which is how its NetworkPolicies came to be
+# missing while the objects ansible had already applied stayed up, making
+# it look like the policies simply had not been written.
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - k8s.keycloak.org
+    resources:
+    - keycloaks
+    - keycloakrealmimports
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - route.openshift.io
+    resources:
+    - routes
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - cert-manager.io
+    resources:
+    - certificates
+    - issuers
+    - clusterissuers
+    verbs:
+    - '*'
+
+- op: add
+  path: "/rules/-"
+  value:
+    apiGroups:
+    - postgresql.k8s.enterprisedb.io
+    resources:
+    - clusters
+    - scheduledbackups
+    - backups
+    - poolers
+    verbs:
+    - '*'
