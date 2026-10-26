@@ -54,6 +54,11 @@ resources:
 {% if 'cnv' in configuration.components %}
   - other-crs/optional/cnv/
 {% endif %}
+{% if 'hub-operators' in configuration.components %}
+  # ACM policy installing the operators that are not carried in this tree as
+  # Subscriptions, placed on the hub rather than applied to it.
+  - other-crs/optional/hub-operators/
+{% endif %}
 {% if 'keycloak' in configuration.components %}
   # NetworkPolicies only. Keycloak itself is still deployed by the keycloak
   # role, but the policies are static manifests so ArgoCD can hold them.

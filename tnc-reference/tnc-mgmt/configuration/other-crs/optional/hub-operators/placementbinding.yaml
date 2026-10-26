@@ -1,0 +1,17 @@
+---
+apiVersion: policy.open-cluster-management.io/v1
+kind: PlacementBinding
+metadata:
+  name: hub-operators-binding
+  namespace: hub-policies
+  annotations:
+    argocd.argoproj.io/sync-wave: "-25"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+placementRef:
+  name: hub-operators-pl
+  apiGroup: cluster.open-cluster-management.io
+  kind: Placement
+subjects:
+  - name: hub-operators
+    apiGroup: policy.open-cluster-management.io
+    kind: Policy

@@ -90,6 +90,12 @@
     - src: gitops-ztp-plugins.yaml.j2
       dest: overlays/gitops/ztp-plugins.yaml
       component: gitops
+    # Needs gitops too: the hub-policies namespace and its
+    # ManagedClusterSetBinding come from reference-crs/required/gitops.
+    - src: hub-operators-policy.yaml.j2
+      dest: other-crs/optional/hub-operators/operators-policy.yaml
+      component: hub-operators
+      requires: gitops
     # Keycloak's declarative surface. The keycloak role renders these same
     # templates to the same paths when it bootstraps, so there is one copy
     # rather than two that can drift.

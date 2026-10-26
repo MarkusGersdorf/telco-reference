@@ -1,0 +1,12 @@
+---
+# The hub-policies namespace and its ManagedClusterSetBinding are not here:
+# reference-crs/required/gitops already creates both for the
+# ztp-argocd-plugins policy, and one binding per cluster set per namespace
+# is enough. That makes this overlay depend on the gitops component.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - operators-policy.yaml
+  - placement.yaml
+  - placementbinding.yaml
