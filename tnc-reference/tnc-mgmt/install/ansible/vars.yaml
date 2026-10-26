@@ -127,6 +127,7 @@ configuration:
     - loki            # log store for logging; enable both or neither
     - cnv
     - keycloak
+    - hub-operators  # ACM policy for operators not in the kustomize tree
     - netbox
     - aap
     - devspaces
@@ -134,6 +135,92 @@ configuration:
     # - kafka
     # - monitoring-kafka
     # - gitops-ztp
+
+  # Version pinning for the operators the hub-operators ACM policy installs.
+  # This is the upgrade control for those operators, so it is worth being
+  # precise about what each state does:
+  #
+  #   versions listed -> the policy approves an InstallPlan only for a
+  #     version named here. Upgrading means adding the new version in git
+  #     and letting the policy act on it, so the change is reviewed and the
+  #     commit is the audit trail.
+  #
+  #   versions empty  -> the policy approves nothing and upgrades wait for
+  #     someone to approve the InstallPlan in the console.
+  #
+  # Neither state upgrades unattended. Pin them to move approval into git.
+  #
+  # Read the currently installed version of each from a running hub:
+  #
+  #   oc get csv -A -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' \
+  #     | sort -u | grep -E 'aap-|cert-manager|cloud-native-postgresql|devspaces|gitlab-operator|rhbk-operator|metallb'
+  #
+  # and what the channel currently offers:
+  #
+  #   oc get packagemanifest <package> -n openshift-marketplace \
+  #     -o jsonpath='{range .status.channels[*]}{.name}={.currentCSV}{"\n"}{end}'
+  #
+  # A pinned list has to be fed. Miss a published z-stream and the operator
+  # simply stays where it is, reported as a violation rather than upgraded.
+  hub_operators:
+    # Taken from a hub already running these operators on the same channels.
+    aap:
+      versions:
+        - aap-operator.v2.7.0-0.1783928748
+        - aap-operator.v2.7.0-0.1784907685
+        - aap-operator.v2.7.0-0.1785438985
+        - aap-operator.v2.7.0-0.1787240540
+        - aap-operator.v2.7.0-0.1788930800
+        - aap-operator.v2.7.0-0.1789585373
+        - aap-operator.v2.7.0-0.1791268465
+    cert-manager:
+      versions:
+        - cert-manager-operator.v1.19.0
+        - cert-manager-operator.v1.20.0
+        - cert-manager-operator.v1.20.1
+    cnpg:
+      versions:
+        - cloud-native-postgresql.v1.28.1
+        - cloud-native-postgresql.v1.28.2
+        - cloud-native-postgresql.v1.29.0
+    keycloak:
+      versions:
+        - rhbk-operator.v26.6.4-opr.1
+        - rhbk-operator.v26.6.5-opr.1
+        - rhbk-operator.v26.6.6-opr.1
+        - rhbk-operator.v26.6.7-opr.1
+
+    # Pinned to the version this hub is running. A single entry means the
+    # operator stays exactly there: the next upgrade is a commit adding the
+    # new CSV, not something that happens overnight.
+    metallb:
+      versions:
+        - metallb-operator.v4.22.0-202610241138
+
+    # Note the CSV is devspacesoperator, not devspaces: the package and the
+    # bundle are named differently for this one, so the <package>.v<version>
+    # shape every other entry follows does not apply here.
+    devspaces:
+      versions:
+        - devspacesoperator.v3.31.0
+
+    gitlab:
+      versions:
+        - gitlab-operator-kubernetes.v3.5.1
+
+    # Not installed yet, so there is no running version to pin to. It stays
+    # on upgradeApproval None until one is added, which means the first
+    # InstallPlan needs approving in the console -- after that, read the
+    # installed CSV and pin it here so later upgrades go through git like
+    # the others:
+    #
+    #   oc get csv -n gitlab-runner-system -o name | grep runner
+    #
+    # Note this is GitLab's own runner operator, not the similarly named
+    # community one; they have different CRDs and their manifests are not
+    # interchangeable.
+    gitlab-runner:
+      versions: []
 
   # Operator catalog source — connected clusters use redhat-operators;
   # disconnected use redhat-operators-disconnected (must match your CatalogSource)

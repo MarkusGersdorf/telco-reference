@@ -1,0 +1,340 @@
+---
+# Example values -- rendered from vars.yaml by stage_config. Edit the
+# hub-operators-policy.yaml.j2 template, not this file.
+# The operators ansible installs imperatively, moved behind an ACM policy so
+# they are placed rather than assumed. Everything here was previously a
+# Subscription applied with oc apply -f by a role, invisible to both ArgoCD
+# and ACM.
+#
+# Three operators are deliberately absent. openshift-gitops-operator,
+# advanced-cluster-management and multicluster-engine cannot be managed this
+# way: ArgoCD has to exist to sync this Policy and ACM has to exist to
+# evaluate it, so the thing being installed would be its own prerequisite.
+# Those stay with ansible bootstrap. The rest of the operators already live
+# in the kustomize tree as plain Subscriptions and are untouched.
+#
+# OperatorPolicy owns the Subscription, the OperatorGroup and InstallPlan
+# approval together, which is why the OperatorGroups appear here rather than
+# as separate objects. It does not create Namespaces, so those come first in
+# their own ConfigurationPolicy.
+#
+# No operator here upgrades unattended, which on a production hub is the
+# whole point. How that is achieved depends on whether the operator has
+# pinned versions in configuration.hub_operators:
+#
+#   versions listed -> upgradeApproval Automatic, scoped to that list. The
+#     controller approves an InstallPlan only for a version named in git,
+#     so adding an entry is the act of approving an upgrade and a reviewed
+#     commit is the audit trail.
+#
+#   versions empty  -> upgradeApproval None. Nothing is approved at all and
+#     upgrades wait for a human in the console.
+#
+# The mode follows the list deliberately. Automatic with an empty list
+# approves everything, so hardcoding Automatic before the lists are
+# populated would turn this policy into exactly the unattended upgrades it
+# exists to prevent. Defaulting to None means the unpinned state is the
+# safe one.
+#
+# Either way this is a change from today, where all seven carry
+# installPlanApproval: Automatic and upgrade themselves.
+#
+# complianceConfig.upgradesAvailable is NonCompliant so a waiting upgrade
+# shows as a policy violation. Without it the InstallPlan sits pending and
+# nothing says so, which is the usual way manual approval turns into never
+# approved.
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: hub-operators
+  namespace: hub-policies
+  annotations:
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+    policy.open-cluster-management.io/standards: NIST SP 800-53
+    policy.open-cluster-management.io/description: >-
+      Operators installed on the hub that are not carried in the kustomize tree.
+    argocd.argoproj.io/sync-wave: "-25"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  disabled: false
+  policy-templates:
+
+    # OperatorPolicy will create an OperatorGroup but not a Namespace, so
+    # these have to land first or every subscription below fails to install.
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: hub-operator-namespaces
+        spec:
+          remediationAction: enforce
+          severity: low
+          object-templates:
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: aap
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: cert-manager-operator
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: postgresql-operator-system
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: openshift-devspaces
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: gitlab-system
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: gitlab-runner-system
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: keycloak
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: metallb-system
+
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-aap-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+          upgradeApproval: Automatic
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: ansible-automation-platform-operator
+            channel: stable-2.7
+            namespace: aap
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: aap-operator
+            namespace: aap
+            targetNamespaces:
+              - aap
+          # The only versions this policy will approve or accept.
+          versions:
+            - aap-operator.v2.7.0-0.1783928748
+            - aap-operator.v2.7.0-0.1784907685
+            - aap-operator.v2.7.0-0.1785438985
+            - aap-operator.v2.7.0-0.1787240540
+            - aap-operator.v2.7.0-0.1788930800
+            - aap-operator.v2.7.0-0.1789585373
+            - aap-operator.v2.7.0-0.1791268465
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-cert-manager-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+          upgradeApproval: Automatic
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: openshift-cert-manager-operator
+            channel: stable-v1
+            namespace: cert-manager-operator
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: cert-manager-operator
+            namespace: cert-manager-operator
+            # No targetNamespaces: AllNamespaces mode, matching the
+            # OperatorGroup this replaces.
+          # The only versions this policy will approve or accept.
+          versions:
+            - cert-manager-operator.v1.19.0
+            - cert-manager-operator.v1.20.0
+            - cert-manager-operator.v1.20.1
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-cnpg-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+          upgradeApproval: Automatic
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: cloud-native-postgresql
+            channel: stable
+            namespace: postgresql-operator-system
+            source: certified-operators
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: postgresql-operator-group
+            namespace: postgresql-operator-system
+            # No targetNamespaces: AllNamespaces mode, matching the
+            # OperatorGroup this replaces.
+          # The only versions this policy will approve or accept.
+          versions:
+            - cloud-native-postgresql.v1.28.1
+            - cloud-native-postgresql.v1.28.2
+            - cloud-native-postgresql.v1.29.0
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-devspaces-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+          upgradeApproval: Automatic
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: devspaces
+            channel: stable
+            namespace: openshift-devspaces
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: devspaces-operator
+            namespace: openshift-devspaces
+            # No targetNamespaces: AllNamespaces mode, matching the
+            # OperatorGroup this replaces.
+          # The only versions this policy will approve or accept.
+          versions:
+            - devspacesoperator.v3.31.0
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-gitlab-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+          upgradeApproval: Automatic
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: gitlab-operator-kubernetes
+            channel: stable
+            namespace: gitlab-system
+            source: certified-operators
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: gitlab-operator-group
+            namespace: gitlab-system
+            targetNamespaces:
+              - gitlab-system
+          # The only versions this policy will approve or accept.
+          versions:
+            - gitlab-operator-kubernetes.v3.5.1
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-gitlab-runner-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+          upgradeApproval: "None"
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: gitlab-runner-operator
+            channel: stable
+            namespace: gitlab-runner-system
+            source: certified-operators
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: gitlab-runner-operator-group
+            namespace: gitlab-runner-system
+            targetNamespaces:
+              - gitlab-runner-system
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-keycloak-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+          upgradeApproval: Automatic
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: rhbk-operator
+            channel: stable-v26
+            namespace: keycloak
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: keycloak-operator
+            namespace: keycloak
+            targetNamespaces:
+              - keycloak
+          # The only versions this policy will approve or accept.
+          versions:
+            - rhbk-operator.v26.6.4-opr.1
+            - rhbk-operator.v26.6.5-opr.1
+            - rhbk-operator.v26.6.6-opr.1
+            - rhbk-operator.v26.6.7-opr.1
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-metallb-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+          upgradeApproval: Automatic
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: metallb-operator
+            channel: stable
+            namespace: metallb-system
+            source: redhat-operators
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: metallb-operator
+            namespace: metallb-system
+            # No targetNamespaces: AllNamespaces mode, matching the
+            # OperatorGroup this replaces.
+          # The only versions this policy will approve or accept.
+          versions:
+            - metallb-operator.v4.22.0-202610241138

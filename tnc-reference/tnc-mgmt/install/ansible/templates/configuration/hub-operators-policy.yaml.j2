@@ -1,0 +1,135 @@
+---
+# The operators ansible installs imperatively, moved behind an ACM policy so
+# they are placed rather than assumed. Everything here was previously a
+# Subscription applied with oc apply -f by a role, invisible to both ArgoCD
+# and ACM.
+#
+# Three operators are deliberately absent. openshift-gitops-operator,
+# advanced-cluster-management and multicluster-engine cannot be managed this
+# way: ArgoCD has to exist to sync this Policy and ACM has to exist to
+# evaluate it, so the thing being installed would be its own prerequisite.
+# Those stay with ansible bootstrap. The rest of the operators already live
+# in the kustomize tree as plain Subscriptions and are untouched.
+#
+# OperatorPolicy owns the Subscription, the OperatorGroup and InstallPlan
+# approval together, which is why the OperatorGroups appear here rather than
+# as separate objects. It does not create Namespaces, so those come first in
+# their own ConfigurationPolicy.
+#
+# No operator here upgrades unattended, which on a production hub is the
+# whole point. How that is achieved depends on whether the operator has
+# pinned versions in configuration.hub_operators:
+#
+#   versions listed -> upgradeApproval Automatic, scoped to that list. The
+#     controller approves an InstallPlan only for a version named in git,
+#     so adding an entry is the act of approving an upgrade and a reviewed
+#     commit is the audit trail.
+#
+#   versions empty  -> upgradeApproval None. Nothing is approved at all and
+#     upgrades wait for a human in the console.
+#
+# The mode follows the list deliberately. Automatic with an empty list
+# approves everything, so hardcoding Automatic before the lists are
+# populated would turn this policy into exactly the unattended upgrades it
+# exists to prevent. Defaulting to None means the unpinned state is the
+# safe one.
+#
+# Either way this is a change from today, where all seven carry
+# installPlanApproval: Automatic and upgrade themselves.
+#
+# complianceConfig.upgradesAvailable is NonCompliant so a waiting upgrade
+# shows as a policy violation. Without it the InstallPlan sits pending and
+# nothing says so, which is the usual way manual approval turns into never
+# approved.
+apiVersion: policy.open-cluster-management.io/v1
+kind: Policy
+metadata:
+  name: hub-operators
+  namespace: hub-policies
+  annotations:
+    policy.open-cluster-management.io/categories: CM Configuration Management
+    policy.open-cluster-management.io/controls: CM-2 Baseline Configuration
+    policy.open-cluster-management.io/standards: NIST SP 800-53
+    policy.open-cluster-management.io/description: >-
+      Operators installed on the hub that are not carried in the kustomize tree.
+    argocd.argoproj.io/sync-wave: "-25"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  disabled: false
+  policy-templates:
+
+    # OperatorPolicy will create an OperatorGroup but not a Namespace, so
+    # these have to land first or every subscription below fails to install.
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1
+        kind: ConfigurationPolicy
+        metadata:
+          name: hub-operator-namespaces
+        spec:
+          remediationAction: enforce
+          severity: low
+          object-templates:
+{% for ns in ['aap', 'cert-manager-operator', 'postgresql-operator-system',
+              'openshift-devspaces', 'gitlab-system', 'gitlab-runner-system',
+              'keycloak', 'metallb-system'] %}
+            - complianceType: musthave
+              objectDefinition:
+                apiVersion: v1
+                kind: Namespace
+                metadata:
+                  name: {{ ns }}
+{% endfor %}
+
+{% for op in [
+     {'key': 'aap',          'pkg': 'ansible-automation-platform-operator', 'channel': 'stable-2.7',  'ns': 'aap',                        'source': configuration.catalog_source, 'og': 'aap-operator',             'targets': ['aap']},
+     {'key': 'cert-manager', 'pkg': 'openshift-cert-manager-operator',      'channel': 'stable-v1',   'ns': 'cert-manager-operator',      'source': 'redhat-operators',           'og': 'cert-manager-operator',    'targets': []},
+     {'key': 'cnpg',         'pkg': 'cloud-native-postgresql',              'channel': 'stable',      'ns': 'postgresql-operator-system', 'source': 'certified-operators',        'og': 'postgresql-operator-group','targets': []},
+     {'key': 'devspaces',    'pkg': 'devspaces',                            'channel': 'stable',      'ns': 'openshift-devspaces',        'source': configuration.catalog_source, 'og': 'devspaces-operator',       'targets': []},
+     {'key': 'gitlab',       'pkg': 'gitlab-operator-kubernetes',           'channel': 'stable',      'ns': 'gitlab-system',              'source': 'certified-operators',        'og': 'gitlab-operator-group',    'targets': ['gitlab-system']},
+     {'key': 'gitlab-runner','pkg': 'gitlab-runner-operator',               'channel': 'stable',      'ns': 'gitlab-runner-system',       'source': 'certified-operators',        'og': 'gitlab-runner-operator-group', 'targets': ['gitlab-runner-system']},
+     {'key': 'keycloak',     'pkg': 'rhbk-operator',                        'channel': 'stable-v26',  'ns': 'keycloak',                   'source': configuration.catalog_source, 'og': 'keycloak-operator',        'targets': ['keycloak']},
+     {'key': 'metallb',      'pkg': 'metallb-operator',                     'channel': 'stable',      'ns': 'metallb-system',             'source': configuration.catalog_source, 'og': 'metallb-operator',         'targets': []},
+   ] %}
+    - objectDefinition:
+        apiVersion: policy.open-cluster-management.io/v1beta1
+        kind: OperatorPolicy
+        metadata:
+          name: hub-{{ op.key }}-operator-policy
+        spec:
+          remediationAction: enforce
+          severity: low
+          complianceType: musthave
+{% set allowed = (configuration.hub_operators | default({})).get(op.key, {}).get('versions', []) %}
+{% if allowed %}
+          upgradeApproval: Automatic
+{% else %}
+          upgradeApproval: "None"
+{% endif %}
+          complianceConfig:
+            upgradesAvailable: NonCompliant
+          subscription:
+            name: {{ op.pkg }}
+            channel: {{ op.channel }}
+            namespace: {{ op.ns }}
+            source: {{ op.source }}
+            sourceNamespace: openshift-marketplace
+          operatorGroup:
+            name: {{ op.og }}
+            namespace: {{ op.ns }}
+{% if op.targets %}
+            targetNamespaces:
+{% for t in op.targets %}
+              - {{ t }}
+{% endfor %}
+{% else %}
+            # No targetNamespaces: AllNamespaces mode, matching the
+            # OperatorGroup this replaces.
+{% endif %}
+{% if allowed %}
+          # The only versions this policy will approve or accept.
+          versions:
+{% for v in allowed %}
+            - {{ v }}
+{% endfor %}
+{% endif %}
+{% endfor %}
