@@ -3,6 +3,10 @@
 # to drive failover, switchover and backups. Deny it and the cluster still
 # serves queries but stops being managed -- it reports instances as unknown
 # and will not promote a replica when the primary goes.
+#
+# Selected by postgresql: <cluster>, the label EDB Postgres for Kubernetes
+# puts on its instance pods -- not cnpg.io/cluster, which belongs to the
+# community operator and matched nothing here.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -13,7 +17,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      cnpg.io/cluster: keycloak-postgres
+      postgresql: keycloak-postgres
   policyTypes:
     - Ingress
   ingress:
@@ -38,7 +42,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      cnpg.io/cluster: keycloak-postgres
+      postgresql: keycloak-postgres
   policyTypes:
     - Ingress
   ingress:

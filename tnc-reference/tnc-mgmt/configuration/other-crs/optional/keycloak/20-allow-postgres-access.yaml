@@ -1,13 +1,19 @@
 ---
-# Who may reach the database on 5432.
+# Database access on 5432.
 #
-# The source is the keycloak namespace rather than the app: keycloak pods
-# alone. Keycloak's own machinery talks to this database from more than the
-# server pods -- the operator's realm import runs as a Job, and backup and
-# restore run in pods the database operator creates -- and those carry
-# labels this repo does not control. Namespace scope still satisfies the
-# requirement that nothing outside Keycloak reaches the database, because
-# the only workloads in this namespace are Keycloak and its database.
+# Selected by postgresql: <cluster>, the label EDB Postgres for Kubernetes
+# puts on its instance pods. The previous version used cnpg.io/cluster,
+# which is community CloudNativePG's label -- it matched nothing here, and
+# a podSelector matching nothing does not fail, it just covers no pods. All
+# the database rules applied to nothing, default-deny-ingress was the only
+# policy left touching those pods, and Keycloak could not reach 5432.
+#
+# The source stays the whole namespace rather than app: keycloak. Keycloak
+# reaches this database from more than its server pods -- the operator's
+# realm import runs as a Job, and backup and restore run in pods the
+# database operator creates, all carrying labels this repo does not
+# control. Nothing outside Keycloak reaches it either way, because nothing
+# else runs in this namespace.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -18,7 +24,7 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      cnpg.io/cluster: keycloak-postgres
+      postgresql: keycloak-postgres
   policyTypes:
     - Ingress
   ingress:
@@ -28,10 +34,9 @@ spec:
         - protocol: TCP
           port: 5432
 ---
-# The database instances replicate between themselves on the same port. This
-# is matched by the rule above today, since the instances sit in this
-# namespace, but it is stated separately so that tightening the rule above
-# to specific pods later cannot silently break replication.
+# Replication between the instances. Covered by the rule above today, since
+# they are pods in this namespace, but kept separate so that narrowing the
+# source there later cannot silently break replication.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -42,14 +47,14 @@ metadata:
 spec:
   podSelector:
     matchLabels:
-      cnpg.io/cluster: keycloak-postgres
+      postgresql: keycloak-postgres
   policyTypes:
     - Ingress
   ingress:
     - from:
         - podSelector:
             matchLabels:
-              cnpg.io/cluster: keycloak-postgres
+              postgresql: keycloak-postgres
       ports:
         - protocol: TCP
           port: 5432
