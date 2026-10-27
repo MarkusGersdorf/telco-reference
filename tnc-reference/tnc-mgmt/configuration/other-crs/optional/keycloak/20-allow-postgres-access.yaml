@@ -8,12 +8,20 @@
 # the database rules applied to nothing, default-deny-ingress was the only
 # policy left touching those pods, and Keycloak could not reach 5432.
 #
-# The source stays the whole namespace rather than app: keycloak. Keycloak
-# reaches this database from more than its server pods -- the operator's
-# realm import runs as a Job, and backup and restore run in pods the
-# database operator creates, all carrying labels this repo does not
-# control. Nothing outside Keycloak reaches it either way, because nothing
-# else runs in this namespace.
+# Only Keycloak's own pods, not the whole namespace.
+#
+# The one thing this can break is the realm import. The operator runs it as
+# a Job rather than in the server pods, and it writes to this database
+# directly, so it needs 5432 like everything else. If that Job's pods do
+# not carry app: keycloak, imports will fail to connect and realm changes
+# will stop applying -- the server itself keeps working, which is what
+# makes it easy to miss. Check during an import with:
+#
+#   oc -n keycloak get pods -l app=keycloak --show-labels
+#
+# and if the Job is labelled differently, widen this to the label both
+# share, app.kubernetes.io/managed-by: keycloak-operator, rather than going
+# back to the whole namespace.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -29,7 +37,9 @@ spec:
     - Ingress
   ingress:
     - from:
-        - podSelector: {}
+        - podSelector:
+            matchLabels:
+              app: keycloak
       ports:
         - protocol: TCP
           port: 5432
