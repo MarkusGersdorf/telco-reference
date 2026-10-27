@@ -1,0 +1,43 @@
+---
+# The agent injector's mutating webhook, on 8080.
+#
+# This rule has no "from", which means it allows every source. That is
+# deliberate and it is the one place in these policies that is genuinely
+# open, so it is worth saying why rather than leaving it to be found.
+#
+# The caller is the API server. It is not a pod and it is not in a
+# namespace, so neither podSelector nor namespaceSelector can express it,
+# and under OVN-Kubernetes its traffic arrives from the host network
+# rather than the pod network. An ipBlock would have to enumerate every
+# control plane address and would break the first time one changed.
+#
+# Getting this wrong is not a quiet failure. If the webhook becomes
+# unreachable and its failurePolicy is Fail, pod creation stops in every
+# namespace it watches -- which can mean the cluster. The chart defaults
+# to Ignore, where the loss is silent instead: pods start without their
+# Vault agent sidecar and nobody is told. Neither outcome is worth
+# risking to narrow a port that exposes an admission webhook rather than
+# any secret.
+#
+# Vault's own API is not reachable this way. The selector is the injector
+# deployment only -- component: webhook, not component: server -- so 8200
+# stays behind allow-vault-api and the injector holds no secret material
+# of its own.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vault-injector-webhook
+  namespace: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault-agent-injector
+      component: webhook
+  policyTypes:
+    - Ingress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080

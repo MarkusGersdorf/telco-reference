@@ -1,0 +1,19 @@
+---
+# Baseline for the namespace: nothing reaches any pod in vault unless a
+# later policy allows it.
+#
+# Ingress only. Vault needs egress to the API server for its kubernetes
+# service registration and auth backend, and the raft peers need to find
+# each other, so an egress baseline has to be worked out rather than
+# assumed -- same position as the keycloak overlay.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  namespace: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
