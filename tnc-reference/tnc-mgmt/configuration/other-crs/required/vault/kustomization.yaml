@@ -13,6 +13,9 @@ resources:
   - VaultCertificate-ca.yaml
   - VaultSecretfortokenreview.yaml
   - ClusterSecretStore-vault.yaml
+  - netpol-00-default-deny-ingress.yaml
+  - netpol-10-vault-api.yaml
+  - netpol-20-vault-injector.yaml
   # Reads from the kafka-cluster namespace and is only consumed by the
   # monitoring-kafka overlay. With Kafka disabled the namespace does not
   # exist and ESO reports the store unhealthy, so leave it out until

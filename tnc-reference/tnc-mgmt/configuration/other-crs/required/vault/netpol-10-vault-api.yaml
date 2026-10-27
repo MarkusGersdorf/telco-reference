@@ -1,0 +1,94 @@
+---
+# Who may call the Vault API on 8200.
+#
+# tlsDisable is set in the helm values and the route terminates at the
+# edge, so this is plain HTTP inside the cluster and 8200 carries the API,
+# the UI and the Prometheus metrics endpoint alike.
+#
+# external-secrets is the namespace the ESO controller runs in, not
+# external-secrets-operator, which holds the operator itself. The
+# ClusterSecretStore authenticates with a ServiceAccount there, so losing
+# this rule stops every ExternalSecret in the cluster from resolving.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vault-api
+  namespace: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+      component: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        # the route
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-ingress
+        # External Secrets, which reads every secret this cluster uses
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: external-secrets
+        # standby nodes forwarding writes to the active one
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+              component: server
+      ports:
+        - protocol: TCP
+          port: 8200
+---
+# Raft replication between the HA peers. Separate from the 8200 rule
+# because it is peer-to-peer only and should never widen to match it.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vault-raft
+  namespace: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+      component: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: vault
+              component: server
+      ports:
+        - protocol: TCP
+          port: 8201
+---
+# serverTelemetry.prometheusOperator is enabled in the helm values, so
+# Prometheus scrapes /v1/sys/metrics on the same 8200.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-vault-metrics
+  namespace: vault
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: vault
+      component: server
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: openshift-monitoring
+      ports:
+        - protocol: TCP
+          port: 8200
