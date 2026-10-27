@@ -65,6 +65,15 @@ spec:
         gatewayApi:
           enabled: false
         hosts:
+          # The routes terminate TLS at the edge, so users reach GitLab over
+          # https while ingress.tls.enabled below is false -- that flag is
+          # about the chart managing its own Ingress and certificates, which
+          # it does not here. Without this, hosts.https defaults to that flag
+          # and GitLab builds every external URL as http://, including the
+          # OAuth redirect the Web IDE uses. The page is https, so the
+          # redirect is blocked as mixed content and the Web IDE fails with
+          # "Failed to load the Web IDE" while the rest of GitLab is fine.
+          https: true
           domain: apps.{{ cluster.name }}.{{ cluster.base_domain }}
           pages:
             name: {{ configuration.gitlab.pages_subdomain }}.apps.{{ cluster.name }}.{{ cluster.base_domain }}
