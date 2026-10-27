@@ -6,6 +6,11 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
+  # gitlab/ is deliberately not listed: the gitlab Application syncs that
+  # directory itself, so listing it here would have hub-config manage the
+  # same objects -- with pruning on, which is exactly what that Application
+  # exists to avoid.
+  - gitlab-app.yaml
   - netbox-ns.yaml
   - netbox-keycloak-externalsecret.yaml
   - vault-app.yaml

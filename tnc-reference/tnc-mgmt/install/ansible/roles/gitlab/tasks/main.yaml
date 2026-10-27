@@ -6,22 +6,22 @@
     mode: "0644"
   loop:
     - src: gitlab-namespace.yaml.j2
-      dest: gitlab-namespace.yaml
+      dest: add-ons/gitlab/gitlab-namespace.yaml
     - src: gitlab-subscription.yaml.j2
       dest: gitlab-subscription.yaml
     - src: gitlab-cr.yaml.j2
-      dest: gitlab-cr.yaml
+      dest: add-ons/gitlab/gitlab-cr.yaml
     - src: gitlab-routes.yaml.j2
-      dest: gitlab-routes.yaml
+      dest: add-ons/gitlab/gitlab-routes.yaml
     - src: gitlab-external-secrets.yaml.j2
-      dest: gitlab-external-secrets.yaml
+      dest: add-ons/gitlab/gitlab-external-secrets.yaml
   loop_control:
     label: "{{ item.dest }}"
 
 - name: Install GitLab operator
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }} apply
-    -f {{ config_stage_dir }}/gitlab-namespace.yaml
+    -f {{ config_stage_dir }}/add-ons/gitlab/gitlab-namespace.yaml
     -f {{ config_stage_dir }}/gitlab-subscription.yaml
 
 - name: Deploy GitLab prerequisites (NooBaa, S3, Vault secrets, PostgreSQL, Redis)
@@ -72,7 +72,7 @@
 - name: Re-render GitLab CR with operator chart version
   ansible.builtin.template:
     src: configuration/gitlab-cr.yaml.j2
-    dest: "{{ config_stage_dir }}/gitlab-cr.yaml"
+    dest: "{{ config_stage_dir }}/add-ons/gitlab/gitlab-cr.yaml"
     mode: "0644"
   vars:
     gitlab_chart_version: "{{ gitlab_csv_version.stdout }}"
@@ -80,12 +80,12 @@
 - name: Create GitLab instance
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    apply -f {{ config_stage_dir }}/gitlab-cr.yaml
+    apply -f {{ config_stage_dir }}/add-ons/gitlab/gitlab-cr.yaml
 
 - name: Create GitLab Routes
   ansible.builtin.command: >
     oc --kubeconfig {{ kubeconfig_path }}
-    apply -f {{ config_stage_dir }}/gitlab-routes.yaml
+    apply -f {{ config_stage_dir }}/add-ons/gitlab/gitlab-routes.yaml
 
 - name: Wait for GitLab to be running
   ansible.builtin.command: >

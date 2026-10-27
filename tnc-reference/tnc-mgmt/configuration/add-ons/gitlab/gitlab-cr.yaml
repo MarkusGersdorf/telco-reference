@@ -1,0 +1,116 @@
+---
+# Example values -- rendered from vars.yaml by stage_config and by the
+# gitlab role, which bootstraps from the same file. Edit the .j2 template.
+apiVersion: apps.gitlab.com/v1beta1
+kind: GitLab
+metadata:
+  name: gitlab
+  namespace: gitlab-system
+spec:
+  chart:
+    version: "10.1.8"
+    values:
+      certmanager:
+        install: false
+      gitlab:
+        toolbox:
+          backups:
+            cron:
+              enabled: true
+              schedule: "0 1 * * *"
+              extraArgs: "--skip artifacts"
+            objectStorage:
+              config:
+                secret: gitlab-backup-object-storage
+                key: connection
+      gitlab-exporter:
+        enabled: false
+      global:
+        appConfig:
+          artifacts:
+            enabled: true
+            bucket: gitlab-artifacts-storage
+          backups:
+            enabled: true
+            bucket: gitlab-backup-storage
+            tmpBucket: gitlab-tmp-storage
+          dependencyProxy:
+            enabled: true
+            bucket: gitlab-dependency-proxy
+          lfs:
+            bucket: gitlab-lfs-storage
+          object_store:
+            enabled: true
+            connection:
+              secret: gitlab-object-storage
+              key: connection
+          omniauth:
+            enabled: true
+            allowSingleSignOn:
+              - openid_connect
+            autoLinkLdapUser: false
+            blockAutoCreatedUsers: true
+            providers:
+              - key: provider
+                secret: gitlab-keycloak
+          packages:
+            enabled: true
+            bucket: gitlab-packages-storage
+          terraformState:
+            enabled: true
+            bucket: gitlab-terraform-state
+          uploads:
+            enabled: true
+            bucket: gitlab-uploads-storage
+        gatewayApi:
+          enabled: false
+        hosts:
+          domain: apps.mgmt1.example.com
+          pages:
+            name: docs.apps.mgmt1.example.com
+        ingress:
+          class: none
+          configureCertmanager: false
+          tls:
+            enabled: false
+        minio:
+          enabled: false
+        pages:
+          enabled: true
+          accessControl: true
+          host: docs.apps.mgmt1.example.com
+          namespaceInPath: true
+          objectStore:
+            enabled: true
+            bucket: gitlab-pages-storage
+            connection:
+              secret: gitlab-object-storage
+              key: connection
+        psql:
+          host: gitlab-postgres-rw
+          port: 5432
+          database: gitlabhq_production
+          username: gitlab
+          password:
+            secret: gitlab-postgres-app-secret
+            key: password
+        redis:
+          host: gitlab-redis
+          auth:
+            secret: gitlab-redis-secret-custom
+            key: default
+        registry:
+          enabled: false
+        replicaCount: 3
+      metrics:
+        enabled: false
+      registry:
+        storage:
+          secret: gitlab-registry-storage
+          key: config
+      nginx-ingress:
+        enabled: false
+      postgresql:
+        install: false
+      prometheus:
+        install: false

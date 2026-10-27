@@ -1,0 +1,40 @@
+---
+# GitLab, as its own Application rather than as part of hub-config.
+#
+# ArgoCD reads its own source of truth out of this GitLab. That makes
+# pruning uniquely dangerous here: hub-config runs with prune enabled, and
+# a sync that decided GitLab's objects were no longer wanted would delete
+# the repository every other Application reconciles from, including the one
+# doing the deleting. Recovery would mean re-running ansible from scratch.
+#
+# So GitLab gets its own Application with prune off. Drift is still
+# corrected and new objects still appear; what cannot happen is deletion.
+# Removing GitLab is a deliberate act, not something a bad render can do.
+#
+# selfHeal stays on. The alternative -- leaving GitLab unmanaged after
+# creation -- gives up the reason for putting it here at all.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: gitlab
+  namespace: openshift-gitops
+  annotations:
+    argocd.argoproj.io/sync-wave: "-5"
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  project: infra
+  destination:
+    server: "https://kubernetes.default.svc"
+    namespace: gitlab-system
+  source:
+    repoURL: "{{ configuration.gitops.repo_url | default('https://placeholder.example.com/repo.git') }}"
+    targetRevision: "{{ configuration.gitops.branch }}"
+    path: "tnc-reference/tnc-mgmt/configuration/add-ons/gitlab"
+  syncPolicy:
+    automated:
+      allowEmpty: true
+      selfHeal: true
+      # Never. See above -- this Application manages ArgoCD's own git remote.
+      prune: false
+    syncOptions:
+      - CreateNamespace=true

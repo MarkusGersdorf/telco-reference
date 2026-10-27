@@ -1,0 +1,34 @@
+---
+# Example values -- rendered from vars.yaml by stage_config and by the
+# gitlab role, which bootstraps from the same file. Edit the .j2 template.
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: gitlab
+  namespace: gitlab-system
+spec:
+  host: gitlab.apps.mgmt1.example.com
+  to:
+    kind: Service
+    name: gitlab-webservice-default
+  port:
+    targetPort: 8181
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: gitlab-pages
+  namespace: gitlab-system
+spec:
+  host: docs.apps.mgmt1.example.com
+  to:
+    kind: Service
+    name: gitlab-gitlab-pages
+  port:
+    targetPort: 8090
+  tls:
+    termination: edge
+    insecureEdgeTerminationPolicy: Redirect

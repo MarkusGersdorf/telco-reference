@@ -87,6 +87,32 @@
     - src: netbox-keycloak-externalsecret.yaml.j2
       dest: add-ons/netbox-keycloak-externalsecret.yaml
       component: hub-add-ons
+    # GitLab. The gitlab role renders these same templates to the same paths
+    # when it bootstraps, so there is one copy rather than two that drift.
+    - src: add-ons-gitlab-app.yaml.j2
+      dest: add-ons/gitlab-app.yaml
+      component: hub-add-ons
+    - src: gitlab-namespace.yaml.j2
+      dest: add-ons/gitlab/gitlab-namespace.yaml
+      component: hub-add-ons
+    - src: gitlab-noobaa-account.yaml.j2
+      dest: add-ons/gitlab/gitlab-noobaa-account.yaml
+      component: hub-add-ons
+    - src: gitlab-external-secrets.yaml.j2
+      dest: add-ons/gitlab/gitlab-external-secrets.yaml
+      component: hub-add-ons
+    - src: gitlab-cnpg-cluster.yaml.j2
+      dest: add-ons/gitlab/gitlab-cnpg-cluster.yaml
+      component: hub-add-ons
+    - src: gitlab-redis.yaml.j2
+      dest: add-ons/gitlab/gitlab-redis.yaml
+      component: hub-add-ons
+    - src: gitlab-cr.yaml.j2
+      dest: add-ons/gitlab/gitlab-cr.yaml
+      component: hub-add-ons
+    - src: gitlab-routes.yaml.j2
+      dest: add-ons/gitlab/gitlab-routes.yaml
+      component: hub-add-ons
     - src: gitops-ztp-plugins.yaml.j2
       dest: overlays/gitops/ztp-plugins.yaml
       component: gitops

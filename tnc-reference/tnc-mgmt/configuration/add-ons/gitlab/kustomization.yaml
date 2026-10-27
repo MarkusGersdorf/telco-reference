@@ -1,0 +1,21 @@
+---
+# GitLab's declarative surface, synced by the gitlab Application rather than
+# by hub-config. That separation is the point: hub-config prunes, and ArgoCD
+# reads its own source of truth out of this GitLab, so a prune here would
+# delete the repository the whole hub reconciles from.
+#
+# Absent on purpose: the operator Subscription, which the hub-operators ACM
+# policy owns, and everything the gitlab role does imperatively -- minting
+# the automation PAT, creating the group and project, and pushing this repo.
+# None of that is expressible as a manifest.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - gitlab-namespace.yaml
+  - gitlab-noobaa-account.yaml
+  - gitlab-external-secrets.yaml
+  - gitlab-cnpg-cluster.yaml
+  - gitlab-redis.yaml
+  - gitlab-cr.yaml
+  - gitlab-routes.yaml
